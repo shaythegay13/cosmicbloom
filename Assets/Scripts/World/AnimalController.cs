@@ -39,7 +39,7 @@ namespace CosmicBloom.World
             body.color = ProceduralSprites.ParseHex(
                 def.palette != null && def.palette.TryGetValue("body", out var b) ? b : null);
             body.sortingOrder = 8;
-            var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
+            var mat = ProceduralSprites.LitMaterial;
             if (mat != null) body.sharedMaterial = mat;
 
             var col = go.AddComponent<CircleCollider2D>();

@@ -36,7 +36,7 @@ namespace CosmicBloom.World
         public static Dictionary<string, Grid> BuildAll(RegionManager regions)
         {
             GameDatabase.LoadAll();
-            var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
+            var mat = ProceduralSprites.LitMaterial;
             var result = new Dictionary<string, Grid>();
 
             for (int i = 0; i < GameDatabase.Regions.Count; i++)

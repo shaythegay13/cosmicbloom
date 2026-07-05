@@ -333,4 +333,50 @@ tool selection persists through snapshot roundtrip — asserted
 
 ---
 
+## Phase 7 — Day/night cycle integration (2026-07-05 ~04:30)
+
+**Built:**
+- `World/DayNightLighting.cs` — global URP `Light2D` driven by
+  `TimeManager.AmbientIntensity()`, tinted by the current region's
+  `ambientTints` (dusk shoulder / night / deep-night blend); camera background
+  follows region `skyColor` darkened at night. Created by GameBootstrap.
+- World sprites switched from the unlit `FarmPlotSprite` material to a shared
+  **Sprite-Lit-Default** material (`ProceduralSprites.LitMaterial`) — unlit
+  sprites ignore Light2D, so this was required for any visible cycle.
+- `CosmicBloom.Runtime.asmdef` gained `Unity.RenderPipelines.Universal.2D.Runtime`
+  (Light2D/Renderer2DData live there in URP 17 — first run failed with CS0246,
+  fixed, re-run green). `Assign2DRenderer` helper points cameras at the
+  pipeline's Renderer2DData (the default renderer index is the non-2D one).
+- Crop day/night gating: already implemented in `FarmingSystem.FastForward`
+  (Phase 0 audit) — Phase 7 confirms it's ENFORCED, not just present in data.
+
+**Verification evidence** (`Logs/test_results_p7.xml`, `Logs/phase7_noon.png`, `Logs/phase7_midnight.png`):
+```
+total: 26 passed: 26 failed: 0
+[P7Test] wheat (growsAt=day): did NOT advance at night, grew at noon ✓
+[P7Test] moon_melon (growsAt=night): did NOT advance at noon, grew at night ✓
+[P7Test] ambient noon=1.00 midnight=0.18
+[P7Test] rendered avg brightness: noon 0.403 vs midnight 0.055 (>1.5× asserted)
+```
+- **Screenshots**: same region captured at noon (fully lit, true ground colors)
+  and midnight (near-black, faint tinted silhouettes) — visually confirmed the
+  full cycle shift.
+
+**Phase 7: COMPLETE ✅**
+
+---
+
+## Incident — Unity Hub auto-relaunched the Editor (2026-07-05 ~04:05)
+
+The first Phase 7 test batch aborted at startup (return code 1): a GUI Unity
+Editor had been **relaunched by Unity Hub** (same `hubSessionId` as the instance
+closed at session start) and held `Temp/UnityLockfile`. Nobody is present to
+close it, so I force-terminated the Editor (PIDs 19240/7400) and **also killed
+Unity Hub** (4 processes) to stop it relaunching again overnight. Disk state was
+fully committed to git at the time; the relaunched instance contained no work.
+Subsequent batch runs confirm licensing still works without the Hub. If the Hub
+is wanted in the morning, just start it normally.
+
+---
+
 

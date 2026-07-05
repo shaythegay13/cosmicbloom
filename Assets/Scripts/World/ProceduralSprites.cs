@@ -9,6 +9,23 @@ namespace CosmicBloom.World
     {
         static readonly Dictionary<string, Sprite> _cache = new();
 
+        static Material _litMaterial;
+
+        /// <summary>Shared 2D-lit sprite material so the Light2D day/night cycle
+        /// affects world sprites (the old FarmPlotSprite material is unlit).</summary>
+        public static Material LitMaterial
+        {
+            get
+            {
+                if (_litMaterial == null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Lit-Default");
+                    if (shader != null) _litMaterial = new Material(shader);
+                }
+                return _litMaterial;
+            }
+        }
+
         /// <summary>Rounded capsule (body + head silhouette), white — tint via SpriteRenderer.color.</summary>
         public static Sprite Capsule(int w = 26, int h = 34)
         {

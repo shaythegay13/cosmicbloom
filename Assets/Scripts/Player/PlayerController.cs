@@ -108,8 +108,8 @@ namespace CosmicBloom.World
             sr.sprite = ProceduralSprites.Capsule();
             sr.color = new Color32(0x7d, 0xd8, 0xc8, 0xff);   // teal cosmic-gardener placeholder
             sr.sortingOrder = 10;
-            var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
-            if (mat != null) sr.sharedMaterial = mat;   // URP sprite-unlit, same as plots
+            var mat = ProceduralSprites.LitMaterial;
+            if (mat != null) sr.sharedMaterial = mat;   // 2D-lit so day/night lighting applies
             return go.AddComponent<PlayerController>();
         }
     }

@@ -45,6 +45,7 @@ namespace CosmicBloom.Core
             NpcSpawner.SpawnAll(regions, save != null ? save.State : null);   // all 50, data-placed
             SpawnPlayer(regions);
             AttachCamera();
+            DayNightLighting.Create();   // global Light2D driven by TimeManager
 
             if (save != null)
             {

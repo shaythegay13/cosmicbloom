@@ -33,7 +33,7 @@ namespace CosmicBloom.World
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = ProceduralSprites.Square(32, 2);
             sr.sortingOrder = 4;
-            var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
+            var mat = ProceduralSprites.LitMaterial;
             if (mat != null) sr.sharedMaterial = mat;
 
             var col = go.AddComponent<BoxCollider2D>();

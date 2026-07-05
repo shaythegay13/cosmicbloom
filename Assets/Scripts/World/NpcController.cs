@@ -37,7 +37,7 @@ namespace CosmicBloom.World
             body.sprite = ProceduralSprites.Capsule();
             body.color = ProceduralSprites.ParseHex(def.palette != null && def.palette.TryGetValue("body", out var b) ? b : null);
             body.sortingOrder = 9;
-            var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
+            var mat = ProceduralSprites.LitMaterial;
             if (mat != null) body.sharedMaterial = mat;
 
             // accent chip so same-body NPCs still differ visually
