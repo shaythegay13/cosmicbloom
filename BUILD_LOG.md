@@ -88,4 +88,52 @@ milestones `[25,50,75,100]` per region.
 
 ---
 
+## Phase 1 — Player character & tap-to-move (2026-07-04 ~23:15)
+
+**Built:**
+- `Assets/Scripts/CosmicBloom.Runtime.asmdef` — game code moved into a named
+  assembly (references `Unity.InputSystem`, `Unity.RenderPipelines.Universal.Runtime`)
+  so PlayMode tests can reference it. Editor folder stays in Assembly-CSharp-Editor.
+- `World/PlayerController.cs` — tap-to-move + tap-to-interact using **new Input
+  System only** (`Pointer.current`; project has `activeInputHandler: 1` so legacy
+  Input would throw). Tap empty ground → walk (clamped to region bounds). Tap an
+  `IInteractable` → interact if within 1.4u, else walk over and interact on arrival.
+  Works for mouse and touch (Touchscreen is a Pointer device).
+- `World/IInteractable.cs` — the interaction contract plots/NPCs/animals implement
+  in later phases.
+- `World/RegionManager.cs` — region world-bounds registry + current-region tracking +
+  `ClampToCurrentRegion`. Travel/unlock gating intentionally deferred to Phase 8.
+- `World/ProceduralSprites.cs` — shared placeholder sprite factory (capsule/square/
+  critter) + hex color parsing; all placeholder art flows through here.
+- `Player/CameraFollow.cs` — smoothed follow, clamps to region bounds, centers
+  small regions; `SnapTo` for region travel.
+- `Core/GameBootstrap.cs` — runtime world assembly on GameManager. **DECISION:**
+  everything dynamic (player, and later NPCs/animals/plots/UI) spawns at runtime
+  from data; the scene keeps only managers/camera/light/tilemaps. Rationale: scene
+  YAML surgery lost work twice on 2026-07-03; runtime spawning is data-driven,
+  domain-reload-proof, and PlayMode-testable headlessly.
+- `Assets/Tests/PlayMode/` — test assembly + 4 movement tests replacing the old
+  manual-keypress verification.
+- Scene delta (one headless edit via `OvernightTasks.Phase1Setup`): GameBootstrap
+  component added to GameManager. Verified in scene YAML: script GUID
+  `87b50cf69b2afea4b9b8478e4fbaccaf` at line 4499.
+
+**Verification evidence** (`Logs/test_results_p1.xml`, `Logs/test_run_p1.log`):
+```
+total: 4 passed: 4 failed: 0 skipped: 0
+[P1Test] start=(10.00, 10.00) target=(14.00, 12.00) → arrived=(14.00, 12.00)
+[P1Test] tap (500,-300) → clamped target=(19.70, 0.30) → stopped at=(19.70, 0.30)  [in bounds]
+[P1Test] walk-then-interact: interactCount=1 at playerPos=(15.00, 10.00)
+```
+Movement, boundary clamping, and both interaction paths (immediate + walk-over)
+all pass in a real PlayMode run against a 20×20 region matching StarlightVale.
+Note: tests drive `PlayerController.OnTapWorld` (the method the Input System tap
+handler calls with the converted world position) — device-level input simulation
+via `InputTestFixture` was skipped as the conversion layer is 3 lines; flagged
+for a quick human tap-test in the morning.
+
+**Phase 1: COMPLETE ✅**
+
+---
+
 

@@ -33,5 +33,28 @@ namespace CosmicBloom.EditorTools
             Debug.Log($"[Phase0] cleanup complete, removed={removed}/2");
             EditorApplication.Exit(removed == 2 ? 0 : 1);
         }
+
+        public static void Phase1Setup()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath);
+            var gm = GameObject.Find("GameManager");
+            if (gm == null)
+            {
+                Debug.LogError("[Phase1] GameManager not found");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            bool added = false;
+            if (gm.GetComponent<Core.GameBootstrap>() == null)
+            {
+                gm.AddComponent<Core.GameBootstrap>();
+                added = true;
+            }
+
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log($"[Phase1] GameBootstrap on GameManager (added={added})");
+            EditorApplication.Exit(0);
+        }
     }
 }
