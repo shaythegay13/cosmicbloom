@@ -1,5 +1,73 @@
 # Cosmic Bloom — Overnight Build Log
 
+---
+
+## Phase-2 Spec / Phase 0 — COMPLETE ✅ (2026-07-05 ~10:40)
+
+**Smoke-test verdict: the game runs on Android.** Non-development IL2CPP APK
+(`Builds/Android/CosmicBloom-release.apk`, build log `phase0_android_build3.log`,
+result=Succeeded, 0 errors) on the x86_64 emulator (ARM64 via binary translation):
+
+```
+[GameDatabase] 5 regions, 26 crops, 50 NPCs, 60 quests, 15 animals, 10 tools   ← LoadAll under IL2CPP ✓
+[NpcSpawner] spawned 50 NPCs across 5 regions
+[LandmarkSpawner] spawned 7 landmarks
+[Quest] started q_arrival: The Arrival
+--- injected REAL touch on the dialogue panel ---
+[Quest] q_arrival → step 1 (move_to)
+[Quest] COMPLETED q_arrival: The Arrival (+0c, +10xp)
+[Quest] started q_first_sprout: First Sprout
+process alive before/after all interactions (pid 12016) — zero crashes
+```
+Screenshots: `Logs/phase0_device_screenshot2.png` (HUD live, dialogue showing).
+**The spec's #1 risk — Newtonsoft/IL2CPP reflection failure — did not materialize;**
+no link.xml or AOT workarounds were needed.
+
+**Findings for the record:**
+1. Dev builds SIGILL in `profiling::Profiler::Initialize` under the emulator's
+   ARM→x86 translation (engine-native, pre-managed-code). Unity 6000.5 REMOVED
+   Android x86_64, so native emulator execution is impossible; the non-dev build
+   sidesteps the profiler path and runs fine. On real ARM64 hardware dev builds
+   are expected to work — verify when a device is available. Profiling sessions
+   need real hardware regardless.
+2. World viewport renders black on the emulator (SwiftShader GPU) while all UI
+   renders correctly — suspect URP 2D-renderer light pass under emulated GL.
+   Needs one look on physical hardware; UI/logic/data fully alive regardless.
+3. Bundle id is still the URP template default — store-readiness item, out of scope.
+4. Emulator infra installed from scratch into Unity's bundled SDK (emulator +
+   android-34 x86_64 image + Pixel 5 AVD `CosmicBloomTest`), reusable for future runs.
+
+### (earlier same-phase notes below)
+## Phase-2 Spec / Phase 0 — Mobile build & runtime smoke test (2026-07-05, in progress)
+
+**Findings so far:**
+1. **Scripting backend: already IL2CPP for Android** (`scriptingBackend: Android: 1`
+   in ProjectSettings) — no Mono finding, no switch needed.
+2. Android module (SDK+NDK+JDK) already installed for 6000.5.1f1 — no Hub install needed.
+3. No physical device attached and no Android Studio SDK existed. Installed the
+   emulator + `system-images;android-34;google_apis;x86_64` **into Unity's bundled
+   SDK via its own sdkmanager**; created a Pixel 5 AVD (`CosmicBloomTest`); boots
+   headless with swiftshader.
+4. **First APK build (ARM64-only, dev, IL2CPP): SUCCEEDED** — 0 errors, 57 MB APK
+   (`Logs/phase0_android_build.log`, `[Phase0-Android] result=Succeeded`).
+   IL2CPP itself compiles the whole project cleanly.
+5. Bundle id is still the URP template default
+   (`com.UnityTechnologies.com.unity.template.urpblank`) — cosmetic until store
+   work (out of scope), but it initially misdirected the launch command; logged
+   as a store-readiness item.
+6. **CRASH FINDING:** the ARM64-only APK dies at engine init on the x86_64
+   emulator — SIGILL in `libunity.so` `profiling::Profiler::Initialize` →
+   `Mutex::AutoLock`, i.e. **inside Unity's native engine startup, before any
+   managed/game code runs**. Not a Newtonsoft/JSON/IL2CPP-stripping failure —
+   the managed layer never executed. Root cause assessment: Android's ARM→x86
+   binary-translation layer choking on Unity's engine init, a known-flaky
+   combination. **Fix applied (technical call, logged): dev builds now target
+   ARM64 + x86_64** so the emulator executes natively; rebuild in progress.
+   Caveat flagged honestly: a translation-layer crash can't 100% rule out a
+   real-ARM64-device issue from an emulator alone — needs one run on physical
+   hardware eventually (no device available tonight).
+
+
 Session start: 2026-07-04 ~22:30 local. Unattended run per build spec.
 Verification model: headless batchmode (`D:\Unity\6000.5.2f1\6000.5.1f1\Editor\Unity.exe`, project is 6000.5.1f1)
 for compiles, Unity Test Runner PlayMode for behavior; MCP not relied upon.
