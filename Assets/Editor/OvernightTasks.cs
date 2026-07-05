@@ -75,5 +75,24 @@ namespace CosmicBloom.EditorTools
             EditorSceneManager.SaveScene(scene);
             EditorApplication.Exit(0);
         }
+
+        /// <summary>FarmGrid now spawns plot views for every lush cell at runtime —
+        /// the single proof-of-concept FarmPlot instance and prefab are superseded.</summary>
+        public static void Phase3RemoveLonePlot()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath);
+            var lone = GameObject.Find("FarmPlot");
+            if (lone != null)
+            {
+                Object.DestroyImmediate(lone);
+                Debug.Log("[Phase3] removed lone FarmPlot instance");
+            }
+            EditorSceneManager.SaveScene(scene);
+
+            if (AssetDatabase.DeleteAsset("Assets/Prefabs/FarmPlot.prefab"))
+                Debug.Log("[Phase3] deleted FarmPlot.prefab (runtime FarmPlot.Create replaces it)");
+            AssetDatabase.SaveAssets();
+            EditorApplication.Exit(0);
+        }
     }
 }

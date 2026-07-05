@@ -168,4 +168,45 @@ total: 7 passed: 7 failed: 0 (4 Phase-1 movement tests still green)
 
 ---
 
+## Phase 3 — Generic farming grid (2026-07-05 ~00:15)
+
+**Built:**
+- `World/FarmGrid.cs` — one per region (bootstrap creates all 5): spawns a
+  `FarmPlot` view for every lush-core cell (8×8 = 64/region, 320 total), all
+  backed by the save's per-region `FarmState.plots` via `FarmingSystem` —
+  single data structure, no parallel state.
+- `Farming/FarmPlot.cs` — rewritten generic: `(regionId, x, y)` + `IInteractable`.
+  Tap runs the plot's contextual action (till→plant→water→harvest). Interaction
+  requires being in the plot's region. Old GameObject.Find snap logic gone;
+  prefab + lone scene instance deleted (`OvernightTasks.Phase3RemoveLonePlot`).
+- `World/CropSelection.cs` — per-region selected crop (defaults to region's first
+  purchasable crop). **DECISION:** quests award no seed items and no shop exists in
+  scope, so planting with an empty pouch auto-buys one seed with coins at the
+  data's `seedPrice` (all crops sell above seed cost except `clover_cover` — a
+  deliberate soil investment — and `heartseed`, quest-only 0/0, excluded from
+  picker/purchase). New saves get 5 starter `starlight_berry` seeds.
+- `Core/GameEvents.cs` — central gameplay event hub (farming publishes
+  tilled/planted/harvested/restoration; quest engine consumes in Phase 5).
+- `FarmingSystem` deltas: **region-appropriateness enforced** (`def.region !=
+  currentRegion → plant refused`), `GameState.FarmFor(regionId)` extracted,
+  GameEvents published. `GameBootstrap` wires save→grids, region-switch
+  FastForward, a 2s growth tick, and starter seeds.
+
+**Verification evidence** (`Logs/test_results_p3.xml`, `Logs/test_run_p3.log`):
+```
+total: 11 passed: 11 failed: 0 (all prior phases still green)
+[P3Test] starlight_vale(7,7) planted starlight_berry → harvested: coins 495→507
+[P3Test] sun_garden(8,8)   planted solar_pepper    → harvested: coins 487→535
+[P3Test] full loop OK: coins=12 xp=5 restoration=4.5 (native ×1.5 bonus asserted)
+[P3Test] region gate OK: solar_pepper refused in starlight_vale, accepted in sun_garden
+```
+Spec's Phase-3 bar met with real interaction: **2 different plots, 2 different
+regions, 2 different crops**, driven through `PlayerController.OnTapWorld` →
+plot collider → contextual action, not debug keys. Watering-gates-every-stage
+asserted separately.
+
+**Phase 3: COMPLETE ✅**
+
+---
+
 

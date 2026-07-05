@@ -21,8 +21,37 @@ namespace CosmicBloom.Core
                 : gameObject.AddComponent<RegionManager>();
 
             RegionGrids = RegionWorldBuilder.BuildAll(regions);   // all 5 regions, data-driven
+
+            var save = GetComponent<Save.SaveManager>();
+            if (save != null)
+            {
+                CropSelection.GrantStarterSeeds(save.State);
+                regions.SetCurrentRegion(save.State.Save.currentRegion);   // resume where saved
+                regions.OnRegionChanged += id =>
+                {
+                    save.State.Save.currentRegion = id;
+                    save.State.MarkDirty();
+                    save.Farming.FastForward();   // catch up crops grown while away
+                };
+
+                foreach (var kv in RegionGrids)
+                    FarmGrid.Create(kv.Key, kv.Value, save.Farming, save.State);
+
+                StartCoroutine(GrowthTick(save.Farming));
+            }
+
             SpawnPlayer(regions);
             AttachCamera();
+        }
+
+        static System.Collections.IEnumerator GrowthTick(Farming.FarmingSystem farming)
+        {
+            var wait = new WaitForSeconds(2f);
+            while (true)
+            {
+                yield return wait;
+                farming.FastForward();
+            }
         }
 
         void SpawnPlayer(RegionManager regions)

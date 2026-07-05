@@ -43,6 +43,7 @@ namespace CosmicBloom.Farming
             if (farm.plots.TryGetValue(key, out var existing) && existing.tilled) return false;
             farm.plots[key] = new PlotState { tilled = true, soilHealth = existing?.soilHealth ?? 100f };
             Fire("till", x, y);
+            GameEvents.PlotTilled(_state.Save.currentRegion);
             return true;
         }
 
@@ -51,6 +52,7 @@ namespace CosmicBloom.Farming
             var plot = PlotAt(x, y);
             var def = GameDatabase.Crop(cropId);
             if (plot == null || !plot.tilled || plot.crop != null || def == null) return false;
+            if (def.region != _state.Save.currentRegion) return false;   // crops.json region-appropriateness
             if (plot.soilHealth < SoilFloorToPlant) return false;
             if (!_state.Save.seeds.TryGetValue(cropId, out var count) || count <= 0) return false;
 
@@ -59,6 +61,7 @@ namespace CosmicBloom.Farming
 
             plot.crop = new CropState { id = cropId, stage = 0, stageStart = NowMs(), needsWater = true };
             Fire("plant", x, y);
+            GameEvents.CropPlanted(cropId, _state.Save.currentRegion);
             return true;
         }
 
@@ -88,8 +91,11 @@ namespace CosmicBloom.Farming
 
             // Soil: harvesting a normal crop drains; cover crops (negative drain) restore
             plot.soilHealth = Math.Clamp(plot.soilHealth - def.soilDrain, 0f, 100f);
+            string harvested = plot.crop.id;
             plot.crop = null;
             Fire("harvest", x, y);
+            GameEvents.CropHarvested(harvested, _state.Save.currentRegion);
+            GameEvents.RestorationChanged(_state.Save.currentRegion, farm.restoration);
             return true;
         }
 

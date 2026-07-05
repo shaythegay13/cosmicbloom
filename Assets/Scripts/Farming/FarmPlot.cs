@@ -1,57 +1,69 @@
+// Cosmic Bloom — one tile-sized plot view + tap interaction, generic across
+// all regions. Created by FarmGrid; state lives in the save's per-region
+// FarmState.plots via FarmingSystem (no local copies).
+// Replaces the Phase-0 single-plot proof of concept (prefab retired).
 using CosmicBloom.Core;
 using CosmicBloom.Data;
-using CosmicBloom.Save;
 using UnityEngine;
 
 namespace CosmicBloom.Farming
 {
-    /// <summary>
-    /// One tile-sized plot view synced to FarmingSystem PlotState at gridX/gridY.
-    /// </summary>
     [RequireComponent(typeof(SpriteRenderer))]
-    public class FarmPlot : MonoBehaviour
+    public class FarmPlot : MonoBehaviour, World.IInteractable
     {
-        public int gridX = 10;
-        public int gridY = 10;
+        public string regionId;
+        public int gridX;
+        public int gridY;
 
-        static readonly Color EmptyColor = new Color32(0x55, 0x55, 0x55, 0xFF);
+        static readonly Color EmptyColor = new Color32(0x55, 0x55, 0x55, 0x60);   // faint until tilled
         static readonly Color TilledColor = new Color32(0x8B, 0x69, 0x14, 0xFF);
         static readonly Color WaterAccent = new Color32(0x44, 0xAA, 0xFF, 0xFF);
         static readonly Color ReadyAccent = new Color32(0xFF, 0xE0, 0x66, 0xFF);
 
         SpriteRenderer _sr;
         FarmingSystem _farming;
-        static Sprite _sprite;
+        GameState _state;
 
-        void Awake()
+        public Vector3 InteractPosition => transform.position;
+
+        public static FarmPlot Create(Transform parent, Grid grid, string regionId, int x, int y,
+                                      FarmingSystem farming, GameState state)
         {
-            _sr = GetComponent<SpriteRenderer>();
-            _sr.sprite = GetTileSprite();
-            _sr.sortingOrder = 5;
+            var go = new GameObject($"Plot_{x}_{y}");
+            go.transform.SetParent(parent, false);
+            go.transform.position = grid.GetCellCenterWorld(new Vector3Int(x, y, 0));
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = World.ProceduralSprites.Square(32, 6);
+            sr.sortingOrder = 5;
             var mat = Resources.Load<Material>("Materials/FarmPlotSprite");
-            if (mat != null) _sr.sharedMaterial = mat;
-            SnapToGrid();
+            if (mat != null) sr.sharedMaterial = mat;
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.size = Vector2.one * 0.95f;
+
+            var plot = go.AddComponent<FarmPlot>();
+            plot.regionId = regionId;
+            plot.gridX = x;
+            plot.gridY = y;
+            plot.Bind(farming, state);
+            return plot;
         }
 
-        void OnEnable()
-        {
-            if (SaveManager.Instance != null)
-            {
-                Bind(SaveManager.Instance.Farming);
-            }
-        }
+        void Awake() => _sr = GetComponent<SpriteRenderer>();
 
-        void OnDisable()
-        {
-            if (_farming != null) _farming.OnAction -= OnFarmAction;
-        }
-
-        public void Bind(FarmingSystem farming)
+        public void Bind(FarmingSystem farming, GameState state)
         {
             if (_farming != null) _farming.OnAction -= OnFarmAction;
             _farming = farming;
+            _state = state;
             if (_farming != null) _farming.OnAction += OnFarmAction;
             RefreshVisual();
+        }
+
+        void OnDestroy()
+        {
+            if (_farming != null) _farming.OnAction -= OnFarmAction;
         }
 
         void OnFarmAction(string action, int x, int y)
@@ -59,25 +71,36 @@ namespace CosmicBloom.Farming
             if (x == gridX && y == gridY) RefreshVisual();
         }
 
-        void LateUpdate()
+        void LateUpdate() => RefreshVisual();   // growth advances via FastForward timers
+
+        public PlotState LivePlot()
         {
-            if (_farming == null && SaveManager.Instance != null)
-                Bind(SaveManager.Instance.Farming);
-            RefreshVisual();
+            if (_state == null) return null;
+            return _state.FarmFor(regionId).plots.TryGetValue($"{gridX},{gridY}", out var p) ? p : null;
         }
 
-        public void SnapToGrid()
+        /// <summary>Tap: perform this plot's contextual action (till/plant/water/harvest).</summary>
+        public void Interact(World.PlayerController player)
         {
-            var grid = GameObject.Find("StarlightVale")?.GetComponent<Grid>();
-            if (grid == null) return;
-            var cell = new Vector3Int(gridX, gridY, 0);
-            transform.position = grid.GetCellCenterWorld(cell);
-        }
+            if (_farming == null || _state == null) return;
+            if (World.RegionManager.Instance != null &&
+                World.RegionManager.Instance.CurrentRegionId != regionId) return;   // must be in-region
 
-        public PlotState LivePlot() => _farming?.PlotAt(gridX, gridY);
+            string action = _farming.ActionFor(gridX, gridY);
+            bool ok = action switch
+            {
+                "till" => _farming.Till(gridX, gridY),
+                "plant" => _farming.Plant(gridX, gridY, World.CropSelection.SelectedFor(_state, regionId)),
+                "water" => _farming.Water(gridX, gridY),
+                "harvest" => _farming.Harvest(gridX, gridY),
+                _ => false,
+            };
+            Debug.Log($"[FarmPlot] {regionId}({gridX},{gridY}) action={action ?? "none"} ok={ok}");
+        }
 
         public void RefreshVisual()
         {
+            if (_sr == null) return;
             var plot = LivePlot();
             if (plot == null || !plot.tilled)
             {
@@ -85,7 +108,6 @@ namespace CosmicBloom.Farming
                 transform.localScale = Vector3.one;
                 return;
             }
-
             if (plot.crop == null)
             {
                 _sr.color = TilledColor;
@@ -94,10 +116,8 @@ namespace CosmicBloom.Farming
             }
 
             var def = GameDatabase.Crop(plot.crop.id);
-            Color crop = def != null ? ParseHex(def.color) : Color.magenta;
-            float stageT = def != null && def.stages > 1
-                ? plot.crop.stage / (float)(def.stages - 1)
-                : 1f;
+            Color crop = def != null ? World.ProceduralSprites.ParseHex(def.color) : Color.magenta;
+            float stageT = def != null && def.stages > 1 ? plot.crop.stage / (float)(def.stages - 1) : 1f;
 
             _sr.color = Color.Lerp(TilledColor, crop, 0.35f + stageT * 0.65f);
             transform.localScale = Vector3.one * (0.85f + stageT * 0.15f);
@@ -106,29 +126,6 @@ namespace CosmicBloom.Farming
                 _sr.color = Color.Lerp(_sr.color, WaterAccent, 0.35f);
             else if (def != null && plot.crop.stage >= def.stages - 1)
                 _sr.color = Color.Lerp(_sr.color, ReadyAccent, 0.25f);
-        }
-
-        static Sprite GetTileSprite()
-        {
-            if (_sprite != null) return _sprite;
-            var tex = new Texture2D(32, 32, TextureFormat.RGBA32, false);
-            tex.filterMode = FilterMode.Point;
-            for (int y = 6; y < 26; y++)
-                for (int x = 6; x < 26; x++)
-                    tex.SetPixel(x, y, Color.white);
-            tex.Apply();
-            _sprite = Sprite.Create(tex, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f), 32f);
-            return _sprite;
-        }
-
-        static Color ParseHex(string hex)
-        {
-            if (string.IsNullOrEmpty(hex)) return Color.magenta;
-            if (hex.StartsWith("#")) hex = hex.Substring(1);
-            byte r = byte.Parse(hex.Substring(0, 2), System.Globalization.NumberStyles.HexNumber);
-            byte g = byte.Parse(hex.Substring(2, 2), System.Globalization.NumberStyles.HexNumber);
-            byte b = byte.Parse(hex.Substring(4, 2), System.Globalization.NumberStyles.HexNumber);
-            return new Color32(r, g, b, 255);
         }
     }
 }

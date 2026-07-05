@@ -71,17 +71,17 @@ namespace CosmicBloom.Core
 
         public GameState(SaveSnapshot save) => Save = save ?? new SaveSnapshot();
 
-        public FarmState CurrentFarm
+        public FarmState CurrentFarm => FarmFor(Save.currentRegion);
+
+        /// <summary>A region's farm state, created on first touch (any of the five regions).</summary>
+        public FarmState FarmFor(string regionId)
         {
-            get
+            if (!Save.farms.TryGetValue(regionId, out var farm))
             {
-                if (!Save.farms.TryGetValue(Save.currentRegion, out var farm))
-                {
-                    farm = new FarmState { seed = UnityEngine.Random.Range(1, int.MaxValue) };
-                    Save.farms[Save.currentRegion] = farm;
-                }
-                return farm;
+                farm = new FarmState { seed = UnityEngine.Random.Range(1, int.MaxValue) };
+                Save.farms[regionId] = farm;
             }
+            return farm;
         }
 
         public static int XpForLevel(int level) => 100 * level;
