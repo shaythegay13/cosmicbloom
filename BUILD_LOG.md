@@ -488,7 +488,64 @@ pause sets timeScale 0 and back — all asserted
 
 ---
 
-## Incident — Unity Hub auto-relaunched the Editor (2026-07-05 ~04:05)
+## Phase 11 — Mobile input & UI pass (2026-07-05 ~07:40)
+
+**Built / changed:**
+- **Real simulated-touch verification**: `MobileInputTests` uses
+  `InputTestFixture` + a virtual `Touchscreen` — an actual screen-space touch
+  tap drives movement and plot interaction through the full input pipeline
+  (no `OnTapWorld` shortcut). Test asmdef gained `Unity.InputSystem` +
+  `Unity.InputSystem.TestFramework` references.
+- **Bug found & fixed by these tests:** `Pointer.press.wasPressedThisFrame`
+  misses presses when editor and dynamic input updates interleave —
+  PlayerController now does its own `isPressed` edge detection (identical
+  behavior on device, robust everywhere).
+- Portrait orientation set in ProjectSettings (`defaultScreenOrientation`
+  AutoRotation→Portrait) per the GDD's portrait-mobile design.
+- UI was already touch-native: same Pointer path for mouse/touch,
+  `InputSystemUIInputModule` EventSystem, 1080×1920 reference scaler.
+
+**Verification evidence** (`Logs/test_results_p11f.xml`, `Logs/phase11_tallphone.png`):
+```
+total: 39 passed: 39 failed: 0   (entire suite, all phases, final regression)
+[P11Test] touch at screen (457,309) → move target (14.00,12.00) → arrived ✓
+[P11Test] plot (7,7) tilled via touchscreen tap ✓
+```
+- **Screenshots at real mobile resolutions**: `phase11_tallphone.png`
+  (1080×2340, 19.5:9) — HUD bars anchor correctly, large touch targets, no
+  overlap; plus the five 720×1280 portrait screens from Phase 9.
+- Pending human check (flagged, not blocking): a hands-on pass in Unity's
+  Device Simulator window (GUI-only feature — can't run headless) to eyeball
+  notch/safe-area handling.
+
+**Phase 11: COMPLETE ✅**
+
+---
+
+## FINAL STATUS — all 11 phases complete (2026-07-05 ~07:45)
+
+**Definition of done met:** the `FullPlaythroughTests.ValeToSunGarden_CoreLoop`
+PlayMode test walks the exact required loop with real systems: start in
+Starlight Vale → complete quests (q_arrival, q_first_sprout via actual
+farming) → raise restoration to 27% → unlock Sun Garden (paying the
+data-driven 1500c at Lv8) → travel there → till/plant/water/harvest a
+sun-native crop. Final suite: **39/39 tests green**, one commit per phase
+(11 commits + baseline), all evidence inline above and in `Logs/`.
+
+**Morning review queue (all flagged inline above):**
+1. DECISION: seed economy — auto-buy at `seedPrice` when pouch empty (no shop UI in scope).
+2. DECISION: quest steps for unbuilt systems (9 of 47 chain quests, first at #7
+   `q_first_catch`) show an explicit skip button — decide build-vs-keep per system.
+3. DECISION: sale quest steps count harvests (instant-sell model, as web game).
+4. DECISION: animal produce coin value `max(2, cost/40)`; animals home in the vale paddock.
+5. DECISION: tool-tier area interpretations (till 3×1, water adjacent/3×3, harvest 1×2/3×3).
+6. Spec divergence: region access = coins+level per data, not a direct restoration latch.
+7. Dialogue box overlaps bottom bar visually (modal, cosmetic).
+8. Unity Hub was force-killed twice after auto-relaunching the Editor (it held
+   the project lock); restart the Hub normally when convenient.
+9. Visual/device checks pending human eyes: device-simulator pass, in-editor feel
+   of camera follow + day/night transition at real time scale.
+
 
 The first Phase 7 test batch aborted at startup (return code 1): a GUI Unity
 Editor had been **relaunched by Unity Hub** (same `hubSessionId` as the instance

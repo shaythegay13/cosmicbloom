@@ -18,6 +18,7 @@ namespace CosmicBloom.World
 
         IInteractable _pendingInteract;
         Camera _cam;
+        bool _pressWasHeld;
 
         void Awake() => _cam = Camera.main;
 
@@ -30,7 +31,15 @@ namespace CosmicBloom.World
         void HandleTap()
         {
             var pointer = Pointer.current;
-            if (pointer == null || !pointer.press.wasPressedThisFrame) return;
+            if (pointer == null) return;
+
+            // own edge detection: wasPressedThisFrame misses presses when editor
+            // and dynamic input updates interleave (PlayMode tests, some editors)
+            bool held = pointer.press.isPressed;
+            bool pressedNow = held && !_pressWasHeld;
+            _pressWasHeld = held;
+            if (!pressedNow) return;
+
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (_cam == null) { _cam = Camera.main; if (_cam == null) return; }
 
