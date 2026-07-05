@@ -366,6 +366,46 @@ total: 26 passed: 26 failed: 0
 
 ---
 
+## Phase 8 — Restoration score & region unlock (2026-07-05 ~05:00)
+
+**Built:**
+- `World/RegionUnlockService.cs` — unlock + travel. Starlight Vale open from the
+  start (snapshot default); the other four gated.
+- **DECISION / spec divergence flagged:** the build spec assumed a direct
+  restoration threshold gates region access, but the shipped data has no such
+  field — regions.json gates unlocks on `unlockCoins` (1500/2500/4000/6000) +
+  `unlockLevel` (8/12/16/20), and the quest chain interleaves
+  `restoration_above` milestones (25/50/75/100) that supply the coins/xp,
+  then `unlock_region` objectives. Implemented exactly what the data says;
+  restoration drives unlocks *through the economy*, not as a direct latch.
+  The spec's verify scenario was adapted accordingly (evidence below covers
+  both halves of that loop).
+- Restoration itself has accrued per-region since Phase 3
+  (`FarmingSystem.Harvest`: `def.restore`, ×1.5 native bonus, clamped 0–100,
+  persisted in the schema's existing `farms[region].restoration`). Nothing new
+  needed — per-region tracking is native to schema 2 (Phase 0 finding).
+- Note: regions.json `milestones` [25,50,75,100] have **no reward data anywhere**,
+  so no claim mechanic was invented; `milestonesClaimed` stays as schema support.
+- Travel confinement: movement clamps to the current region's bounds, so locked
+  regions are physically unreachable (regions are 20 units apart; taps toward
+  another region clamp at the edge — asserted).
+
+**Verification evidence** (`Logs/test_results_p8.xml`):
+```
+total: 30 passed: 30 failed: 0
+[P8Test] restoration artificially raised to 25 → restoration_above quest completed
+         (the chain step that funds unlocks — spec's "raise restoration" half)
+[P8Test] sun_garden unlock: level 7 refused, 1499c refused; at Lv8+1600c →
+         coins 1600→100, unlockedRegions += sun_garden ("becomes accessible" half)
+[P8Test] q_gates_of_sun (unlock_region step) completed via the real unlock event
+[P8Test] travel: locked refused; unlocked → player at moon_garden center (90,10);
+         tap toward the vale clamped to (80.30, 10) — confinement holds
+```
+
+**Phase 8: COMPLETE ✅**
+
+---
+
 ## Incident — Unity Hub auto-relaunched the Editor (2026-07-05 ~04:05)
 
 The first Phase 7 test batch aborted at startup (return code 1): a GUI Unity
