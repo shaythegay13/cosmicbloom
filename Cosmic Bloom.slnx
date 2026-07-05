@@ -1,6 +1,6 @@
 ﻿<Solution>
   <Project Path="CosmicBloom.Runtime.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="CosmicBloom.PlayTests.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
 </Solution>

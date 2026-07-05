@@ -91,7 +91,7 @@ namespace CosmicBloom.Farming
             {
                 "till" or "water" or "harvest" => ToolService.Perform(_farming, _state, action, gridX, gridY),
                 "plant" => ToolService.Perform(_farming, _state, action, gridX, gridY,
-                                               World.CropSelection.SelectedFor(_state, regionId)),
+                                               World.CropSelection.SelectedForPlanting(_state, regionId)),
                 _ => 0,
             };
             Debug.Log($"[FarmPlot] {regionId}({gridX},{gridY}) action={action ?? "none"} cells={done}");

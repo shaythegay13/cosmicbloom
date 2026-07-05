@@ -19,6 +19,7 @@ namespace CosmicBloom.World
     {
         static readonly Dictionary<string, string> _selected = new();   // regionId -> cropId
 
+        /// <summary>Pure query — safe for UI labels; never spends coins.</summary>
         public static string SelectedFor(GameState state, string regionId)
         {
             if (!_selected.TryGetValue(regionId, out var cropId) || GameDatabase.Crop(cropId) == null)
@@ -26,6 +27,13 @@ namespace CosmicBloom.World
                 cropId = OptionsFor(regionId).FirstOrDefault()?.id;
                 if (cropId != null) _selected[regionId] = cropId;
             }
+            return cropId;
+        }
+
+        /// <summary>Planting path: same selection, but tops up the pouch (may spend coins).</summary>
+        public static string SelectedForPlanting(GameState state, string regionId)
+        {
+            var cropId = SelectedFor(state, regionId);
             EnsureSeed(state, cropId);
             return cropId;
         }

@@ -406,6 +406,44 @@ total: 30 passed: 30 failed: 0
 
 ---
 
+## Phase 9 — Core UI (2026-07-05 ~06:10)
+
+**Built (all code-generated uGUI on the Phase 4 canvas, portrait 1080×1920 reference):**
+- `UI/HudUI.cs` — top stats bar (coins, level+XP, day/night + day number, current
+  region + restoration %) and a bottom 5-button bar: Quests / Map / tool-cycle /
+  crop-cycle / Menu. Replaces the Phase 5/6 floating buttons.
+- `UI/RegionMapUI.cs` — Star Map: all five regions as region-tinted rows with
+  live restored-% for unlocked ones and data-driven cost line for locked ones;
+  tap to travel or attempt unlock (Phase 8 service).
+- `UI/PauseMenuUI.cs` — pause (timeScale 0) / resume / manual save (writes via
+  SaveManager) / Cosmic Ranch entry.
+- `UI/RanchUI.cs` — all 15 animals listed from animals.json with cost + level
+  + owned state; tap to buy.
+- **Bug found by the tests and fixed:** the HUD's crop-label query called
+  `CropSelection.SelectedFor`, which had the seed auto-purchase side effect —
+  the UI was silently spending 5 coins per frame-1 label refresh. Split into
+  pure `SelectedFor` (UI-safe) vs `SelectedForPlanting` (plant path only).
+- **Batchmode lesson:** `WaitForEndOfFrame` never completes headlessly — the
+  first UI capture run hung Unity and had to be killed. Replaced with
+  frame-yields; all later capture tests inherit the fix.
+
+**Verification evidence** (`Logs/test_results_p9b.xml`, `Logs/phase9_*.png`):
+```
+total: 33 passed: 33 failed: 0
+[P9Test] HUD: ⛁ 321  Lv 1 (0/100xp)  ☀ Day 1  Starlight Vale: 0% restored (live state asserted)
+quest log opens/lists The Arrival step 2/2; map lists all 5 regions with data costs;
+pause sets timeScale 0 and back — all asserted
+```
+- **Screenshots (portrait 720×1280)**: `phase9_hud.png`, `phase9_questlog.png`,
+  `phase9_map.png`, `phase9_dialogue.png`, `phase9_pause.png` — visually
+  confirmed each screen renders with live data and no ruinous overlap.
+  Morning-polish note: the dialogue box slightly overlaps the bottom button bar
+  (dialogue is modal, so no interaction conflict, but it's visually untidy).
+
+**Phase 9: COMPLETE ✅**
+
+---
+
 ## Incident — Unity Hub auto-relaunched the Editor (2026-07-05 ~04:05)
 
 The first Phase 7 test batch aborted at startup (return code 1): a GUI Unity
