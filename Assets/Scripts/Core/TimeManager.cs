@@ -37,6 +37,11 @@ namespace CosmicBloom.Core
             _wasNight = IsNight;
         }
 
+        void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
         void Update()
         {
             float prev = timeOfDay;

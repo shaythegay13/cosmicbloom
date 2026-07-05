@@ -40,6 +40,7 @@ namespace CosmicBloom.Core
                 StartCoroutine(GrowthTick(save.Farming));
             }
 
+            NpcSpawner.SpawnAll(regions, save != null ? save.State : null);   // all 50, data-placed
             SpawnPlayer(regions);
             AttachCamera();
         }

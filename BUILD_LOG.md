@@ -209,4 +209,39 @@ asserted separately.
 
 ---
 
+## Phase 4 — Generic NPC system + dialogue (2026-07-05 ~00:50)
+
+**Built:**
+- `World/NpcController.cs` — ONE controller for all 50 NPCs; name/region/palette/
+  day-night presence/dialogue all from `GameDatabase.Npc`. Placeholder capsule body
+  tinted `palette.body` + accent chip tinted `palette.accent`. `activeAt` honored:
+  day NPCs hide at night and vice versa (renderers+colliders toggle on
+  sunrise/nightfall events). Tap → dialogue; intro on first meeting, idle after
+  (met-state persisted in new `npcsMet` save field — validator-safe extension).
+  Talking fires `GameEvents.TalkedTo` for the Phase 5 quest engine.
+- `World/NpcSpawner.cs` — all 50 spawn into their data region, evenly ringed.
+- `UI/UIRoot.cs` — code-built canvas (portrait 1080×1920 reference) + EventSystem
+  with `InputSystemUIInputModule` (input-system-only project). All later UI hangs here.
+- `UI/DialogueUI.cs` — bottom dialogue box: speaker, line, tap-to-close.
+  Checked the data first: dialogue keys are only intro/idle/quest_complete —
+  **no branching exists**, so linear display is correct, not a simplification.
+- `TimeManager.OnDestroy` now clears its singleton (test hygiene).
+
+**Verification evidence** (`Logs/test_results_p4.xml`):
+```
+total: 14 passed: 14 failed: 0 (all prior phases green)
+[NpcSpawner] spawned 50 NPCs across 5 regions (10/region asserted)
+[P4Test] zyx said:    "Oh! A new gardener! The Vale picked a good one…"   (starlight_vale)
+[P4Test] lumina said: "Oh — hello. Sorry, I was talking to the ferns…"     (starlight_vale)
+[P4Test] solmara said:"The forge went cold the year the stars dimmed…"     (sun_garden)
+[P4Test] zyx 2nd chat → idle line (met-tracking verified)
+night-only NPC hidden at noon / visible at night; day NPC inverse — asserted
+```
+3 NPCs across 2 regions each spoke their own data dialogue (spec bar: ≥3 NPCs,
+≥2 regions ✓), plus per-NPC palette spawning for all 50.
+
+**Phase 4: COMPLETE ✅**
+
+---
+
 

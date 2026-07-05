@@ -52,6 +52,7 @@ namespace CosmicBloom.Core
         public List<string> animals = new();
         public List<string> questsCompleted = new();
         public string activeQuest = "q_arrival";
+        public List<string> npcsMet = new();                // intro-vs-idle dialogue tracking
         public bool fullGameUnlocked;                       // cb_full_unlock entitlement
         public List<string> cosmeticsOwned = new();
         public Dictionary<string, FarmState> farms = new();
