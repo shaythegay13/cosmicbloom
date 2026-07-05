@@ -54,6 +54,8 @@ namespace CosmicBloom.Core
                     : gameObject.AddComponent<QuestEngine>();
                 Quests.Bind(save.State);
 
+                AnimalSpawner.SpawnOwned(save.State, regions);
+
                 // floating quest-log toggle until the Phase 9 HUD replaces it
                 _questLog = UI.QuestLogUI.Create(Quests);
                 var button = UI.UIRoot.MakeButton(UI.UIRoot.Canvas.transform, "QuestsButton", "Quests",
@@ -62,6 +64,24 @@ namespace CosmicBloom.Core
                 rt.anchorMin = new Vector2(0.74f, 0.935f);
                 rt.anchorMax = new Vector2(0.98f, 0.988f);
                 rt.offsetMin = rt.offsetMax = Vector2.zero;
+
+                // floating tool-switch until the Phase 9 HUD replaces it
+                UnityEngine.UI.Text toolLabel = null;
+                var toolButton = UI.UIRoot.MakeButton(UI.UIRoot.Canvas.transform, "ToolButton", "Tool", () =>
+                {
+                    var owned = save.State.Save.tools;
+                    if (owned.Count == 0) return;
+                    int idx = Mathf.Max(0, owned.IndexOf(toolLabel.text));
+                    string next = owned[(idx + 1) % owned.Count];
+                    Farming.ToolService.SelectTool(save.State, next);
+                    toolLabel.text = next;
+                });
+                toolLabel = toolButton.GetComponentInChildren<UnityEngine.UI.Text>();
+                toolLabel.text = save.State.Save.tools.Count > 0 ? save.State.Save.tools[0] : "Tool";
+                var trt = (RectTransform)toolButton.transform;
+                trt.anchorMin = new Vector2(0.48f, 0.935f);
+                trt.anchorMax = new Vector2(0.72f, 0.988f);
+                trt.offsetMin = trt.offsetMax = Vector2.zero;
             }
         }
 

@@ -56,6 +56,7 @@ namespace CosmicBloom.Core
         public List<string> activeQuests = new();                    // quest engine: parallel active set
         public Dictionary<string, int> questStepIndex = new();       // questId -> current step
         public Dictionary<string, int> questStepProgress = new();    // questId -> counter within step
+        public Dictionary<string, string> selectedTools = new();      // action -> chosen tool id
         public bool fullGameUnlocked;                       // cb_full_unlock entitlement
         public List<string> cosmeticsOwned = new();
         public Dictionary<string, FarmState> farms = new();

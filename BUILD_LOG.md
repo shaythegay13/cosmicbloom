@@ -296,4 +296,41 @@ the next** (spec bar: ≥3 ✓). Progress state survives a JSON snapshot roundtr
 
 ---
 
+## Phase 6 — Animals & tools (2026-07-05 ~02:20)
+
+**Built:**
+- `World/AnimalController.cs` — ONE behavior for all 15 animals (palette tint,
+  produce type/timer from animals.json). Wanders near home; tap = pet, or collect
+  ready produce (glow cue). **DECISION:** produce has no price data → collecting
+  grants `max(2, cost/40)` coins and fires `ItemGranted(produce)` which `collect`
+  quest steps consume (q_egg_basket's glowing_egg ×5 works end-to-end).
+- `World/AnimalSpawner.cs` — owned animals spawn in a Starlight Vale paddock
+  (animals.json has no home-region field — flagged); `TryBuy` enforces data
+  cost + unlockLevel and fires `AnimalBought` for buy_animal steps.
+- `Farming/ToolService.cs` — tool tiers from tools.json shape farming areas.
+  **DECISION — notes→area interpretation:** till t3 = 3×1 row; water t2 = target+
+  4 neighbors, t3 = 3×3; harvest t1 = 1×2, t2 = 3×3; clear/fish don't map to plot
+  actions this pass. Active tool = highest owned tier unless explicitly selected;
+  selection persists in new `selectedTools` save field. FarmPlot taps now route
+  through `ToolService.Perform`.
+- Tool-switch UI: floating cycle button (Phase 9's HUD replaces it).
+
+**Verification evidence** (`Logs/test_results_p6.xml`, `Logs/phase6_animals.png`):
+```
+total: 22 passed: 22 failed: 0
+[P6Test] till: tier1=1 cell, tier3=3 cells — different behavior confirmed
+tier-3 mister waters full 3x3 (9 plots) — asserted
+[P6Test] chicken: buy(-200c per data) → pet (no produce) → ForceReady → collect:
+         +5c, item=glowing_egg (quest event captured)
+tool selection persists through snapshot roundtrip — asserted
+```
+- **Screenshot** `Logs/phase6_animals.png`: two tinted critters (Star Chicken cream,
+  Star Sheep pale-blue) in the vale paddock — visually confirmed.
+- Spec bar "two tool tiers showing different behavior": tier-1 hoe = 1 cell vs
+  tier-3 hoe = 3 cells, plus 1 vs 9 cells for watering ✓.
+
+**Phase 6: COMPLETE ✅**
+
+---
+
 

@@ -87,15 +87,14 @@ namespace CosmicBloom.Farming
                 World.RegionManager.Instance.CurrentRegionId != regionId) return;   // must be in-region
 
             string action = _farming.ActionFor(gridX, gridY);
-            bool ok = action switch
+            int done = action switch
             {
-                "till" => _farming.Till(gridX, gridY),
-                "plant" => _farming.Plant(gridX, gridY, World.CropSelection.SelectedFor(_state, regionId)),
-                "water" => _farming.Water(gridX, gridY),
-                "harvest" => _farming.Harvest(gridX, gridY),
-                _ => false,
+                "till" or "water" or "harvest" => ToolService.Perform(_farming, _state, action, gridX, gridY),
+                "plant" => ToolService.Perform(_farming, _state, action, gridX, gridY,
+                                               World.CropSelection.SelectedFor(_state, regionId)),
+                _ => 0,
             };
-            Debug.Log($"[FarmPlot] {regionId}({gridX},{gridY}) action={action ?? "none"} ok={ok}");
+            Debug.Log($"[FarmPlot] {regionId}({gridX},{gridY}) action={action ?? "none"} cells={done}");
         }
 
         public void RefreshVisual()
