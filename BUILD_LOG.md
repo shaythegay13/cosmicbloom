@@ -71,62 +71,89 @@ pending" special case is removed (real pickups now exist for it).
   itself: `Object.Destroy` defers to end-of-frame, so the pickup-despawn
   assertion needed a `yield return null` before checking; not a production
   bug, fixed in the test.)
-- **Full-suite regression: BLOCKED, not conclusively diagnosed.** Three
-  separate attempts to run the complete PlayMode suite (pre-existing classes
-  + the new Phase 2 tests together) hit native Unity crashes today, each a
-  different signature: (1) a `Camera.Render()` crash inside
+- **Full-suite regression investigation (2026-07-05, later same day):** three
+  separate attempts to run the complete PlayMode suite hit native Unity
+  crashes, each a different signature: (1) a `Camera.Render()` crash inside
   `CoreUiTests.CaptureEachUiScreen_Portrait` (URP `ScriptableRenderContext`),
   (2) a hang after crash during Editor shutdown inside
   `WorkerManagerASIO`/`TcpMessagingServerClientSession` teardown (process
   stayed alive post-crash-trace and had to be force-killed — confirmed hung,
   not slow, via `tasklist`), (3) a crash inside
   `DelayedCallManager::Update → Coroutine::ContinueCoroutine →
-  mono_runtime_invoke`, reproduced twice, including once *after* disabling
-  the AI-Assistant MCP relay (see below) — so the relay is not a confirmed
-  cause of that one. All three coincided with sustained high system RAM
-  usage (a 6GB Unity.exe plus, at times, a multi-GB crash-handler process, on
-  a 16GB-total machine) — **resource exhaustion is a plausible common thread
-  across all three, but this was not conclusively diagnosed.** A `-testFilter`
-  attempt to run the pre-existing classes as a comma-separated list also
-  produced a spurious `test_results_p2full.xml` with `testcasecount="0"` —
-  that is a filter-syntax miss (Unity's `-testFilter` didn't accept the
-  multi-class comma list the way expected), **not a passing regression
-  check** — no tests actually executed in that run; it is not evidence of
-  anything and should not be read as one.
-- **MCP relay investigation (dead end, reverted):** the AI Assistant
-  package's MCP relay (`UserSettings/mcp.json`) auto-starts on every Editor
-  domain load, batchmode included, and its own source comment
+  mono_runtime_invoke`, reproduced twice. A `-testFilter` attempt to run the
+  pre-existing classes as a comma-separated list also produced a spurious
+  `test_results_p2full.xml` with `testcasecount="0"` — that was a
+  filter-syntax miss (Unity's `-testFilter` didn't accept a multi-class comma
+  list; `;` is the correct separator, confirmed later), not a passing
+  regression check.
+- **MCP relay investigated as a cause of (2)/(3) — dead end, reverted.** The
+  AI Assistant package's MCP relay (`UserSettings/mcp.json`) auto-starts on
+  every Editor domain load, batchmode included, and its own source comment
   (`RelayService.SuppressAutoStart`, package `com.unity.ai.assistant`)
   literally describes "a relay crash can otherwise poison strict LogAssert
-  checks in any concurrently running test" — a strong match for the
-  symptom, but that method is `internal`, not actually callable from project
-  code despite the doc comment (calling it would need reflection into
-  Unity-internal package types, not done). Set `mcp.json`'s `"enabled"` to
-  `false` as a coarser attempt; a `-runTests` run afterward **still crashed
-  at the identical `DelayedCallManager`/`Coroutine` stack, and `[relay]` log
-  lines still appeared** (a client still connected and ran its full 180s
-  auto-shutdown lifecycle) — so the flag does not actually stop the relay's
-  in-Editor timer/coroutine machinery, only some narrower surface. Reverted
-  `mcp.json` back to `"enabled": true` since disabling it had no measured
-  benefit and does disable live Unity MCP connectivity for any external
-  client (Cursor, Claude, etc.) while off.
-- Given the above, Phase 2's mechanism evidence rests on the isolated
-  `QuestGapPhase2Tests` run (13/13, real triggers, not stubs) plus a clean
-  compile. Full cross-suite regression coverage (confirming nothing in
-  `QuestEngine.cs`/`GameEvents.cs`/`ToolService.cs`/`LandmarkController.cs`/
-  `GameBootstrap.cs`/`GameState.cs`/`QuestLogUI.cs` broke the pre-existing
-  Phase 5–11 tests) is outstanding, blocked by this environment issue.
+  checks in any concurrently running test" — a strong textual match, but
+  that method is `internal`, not actually callable from project code despite
+  the doc comment. Set `mcp.json`'s `"enabled"` to `false` as a coarser
+  attempt; a `-runTests` run afterward **still crashed at the identical
+  `DelayedCallManager`/`Coroutine` stack, and `[relay]` log lines still
+  appeared** — the flag does not stop the relay's in-Editor timer/coroutine
+  machinery. Reverted `mcp.json` back to `"enabled": true`; **this crash
+  signature (3) and the shutdown hang (2) remain unresolved** — not fixed by
+  anything in this session, not re-diagnosed further, still open.
+- **Root cause of (1) confirmed via clean-reboot repro:** with nothing else
+  running and the active build target switched back to Standalone (see
+  below), `CoreUiTests.CaptureEachUiScreen_Portrait` crashed again on a
+  clean machine with the specific native error **"Unable to find surface for
+  attachment 0"** — `-nographics` genuinely has no render surface, and
+  `Camera.Render()` cannot work under it. This rules out RAM pressure and the
+  Android build target as causes **of this specific crash** (they were not
+  ruled out for (2)/(3), which are a different stack entirely). Along the
+  way: switched the active build target from Android back to Standalone
+  (Android became active during Phase 0 today; the last known-clean 39/39
+  run, per the Phase 11 log, predates that switch) — kept at Standalone.
+  Sentis (`com.unity.ai.inference`) was checked and is an independent
+  top-level dependency in `Packages/manifest.json`, not pulled in
+  transitively by `com.unity.ai.assistant` — that specific causal link for
+  (2)/(3) doesn't hold, though Sentis isn't otherwise ruled out.
+- **Fix implemented: split the PlayMode suite by render requirement.** Five
+  tests actually call `Camera.Render()`/`ReadPixels` for screenshot capture —
+  four are `Capture*`-named, plus one that isn't
+  (`DayNightTests.LightingShift_NoonVersusMidnight_Screenshots`, same
+  pattern, caught by grepping for `.Render()`/`RenderTexture` rather than
+  trusting the naming convention):
+  `CoreUiTests.CaptureEachUiScreen_Portrait`,
+  `DayNightTests.LightingShift_NoonVersusMidnight_Screenshots`,
+  `MobileScreenTests.CaptureTallPhoneHud` (note: lives in `MobileScreenTests`,
+  a second class in `MobileInputTests.cs` — not in `MobileInputTests` itself,
+  a naming trap worth remembering for future filter use),
+  `RegionWorldTests.CaptureAllRegionsOverviewPng`,
+  `ToolAnimalTests.CaptureAnimalInSceneScreenshot`. These five now run in
+  their own batchmode invocation **without** `-nographics` (a real render
+  surface); everything else keeps running with `-nographics` as before.
+- **Real, final pass/fail numbers (2026-07-05, post-fix):**
+  - Non-render half (47 tests, `-nographics`): **47/47 PASS**,
+    `Logs/p2_split_nographics.xml`.
+  - Render-requiring half (5 tests, no `-nographics`): **5/5 PASS**,
+    `Logs/p2_split_render.xml` (4 of the 5) +
+    `Logs/p2_mobilescreen_solo.xml` (the 5th, `CaptureTallPhoneHud`, run
+    solo after the class-name correction above).
+  - **Total: 52/52 PASS, 0 failures** — matches the suite's full
+    `testcasecount`. This is the actual, conclusive full-suite regression
+    result: nothing in `QuestEngine.cs`/`GameEvents.cs`/`ToolService.cs`/
+    `LandmarkController.cs`/`GameBootstrap.cs`/`GameState.cs`/
+    `QuestLogUI.cs` broke any pre-existing Phase 5–11 test, and all 13 new
+    Phase 2 tests are included in the 47.
 
-**NEXT STEP (do this first, before any other work, next session):** reboot
-the machine, close everything else, then run the full unfiltered PlayMode
-suite (`-runTests -testPlatform PlayMode`, no `-testFilter`) exactly once
-before starting new work. Treat that single result as the real signal on
-whether this was load/resource exhaustion (clean pass under low memory
-pressure) or a genuine bug (crash recurs even with a clean, otherwise-idle
-machine).
+**STILL OPEN — do not treat as resolved:** crash signatures (2) (shutdown
+hang in `WorkerManagerASIO`) and (3) (`DelayedCallManager`/`Coroutine`
+crash) are different from the screenshot/render crash and were **not** fixed
+by the `-nographics` split. They may be RAM-related, platform-related, or
+something else entirely — genuinely undiagnosed. If either recurs, treat it
+as a fresh investigation, not an instance of the render-surface issue.
 
 **Phase-2 Spec / Phase 2: quest mechanisms COMPLETE, full regression
-verification OUTSTANDING.**
+verification COMPLETE (52/52 pass). Two unrelated crash signatures from
+today's investigation remain unresolved and open for a future session.**
 
 ---
 
