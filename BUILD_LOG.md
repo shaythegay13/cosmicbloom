@@ -136,4 +136,36 @@ for a quick human tap-test in the morning.
 
 ---
 
+## Phase 2 — All five region tilemaps (2026-07-04 ~23:45)
+
+**Built:**
+- `World/RegionWorldBuilder.cs` — builds every region's Grid+Tilemap at runtime
+  from `regions.json`: 20×20 cells, tiered rings (outer wild ring tier 0, mid ring
+  tier 1, inner 8×8 lush core tier 2 = the future farmable area), colors strictly
+  from each region's `groundTiers` (zero hardcoded colors). Regions sit 40 world
+  units apart on X: vale@0, sun@40, moon@80, star@120, nebula@160.
+- **DECISION:** region tilemaps are runtime-generated (extending Phase 1's bootstrap
+  decision), not baked into the scene. The hand-baked StarlightVale grid was removed
+  from the scene via `OvernightTasks.Phase2RemoveBakedGrid` — the builder recreates it
+  with identical geometry (lush core still contains the existing save's plot at 10,10,
+  asserted in tests). Scene YAML shrank 4931 → 576 lines. JSON color edits now show up
+  without any rebake.
+- The lone FarmPlot prefab instance currently idles at (0.5,0.5) — its grid-snap
+  target no longer exists at Awake time. Replaced next phase by the farm grid.
+
+**Verification evidence** (`Logs/test_results_p2.xml`, `Logs/phase2_regions.png`):
+```
+total: 7 passed: 7 failed: 0 (4 Phase-1 movement tests still green)
+[P2Test] per-region tier colors asserted == regions.json for all 5 regions
+[P2Test] bounds: vale(0..20) sun(40..60) moon(80..100) star(120..140) nebula(160..180) — pairwise non-overlap asserted
+```
+- **Screenshot captured headlessly** (`Logs/phase2_regions.png`, via camera→RenderTexture
+  in the PlayMode run *without* `-nographics`): visually confirmed 5 distinct regions,
+  each showing its 3-tier ring in the correct regions.json palette. The batchmode
+  screenshot pipeline works — later phases get real visual evidence too.
+
+**Phase 2: COMPLETE ✅**
+
+---
+
 

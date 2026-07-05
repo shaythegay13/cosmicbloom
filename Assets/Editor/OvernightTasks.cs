@@ -56,5 +56,24 @@ namespace CosmicBloom.EditorTools
             Debug.Log($"[Phase1] GameBootstrap on GameManager (added={added})");
             EditorApplication.Exit(0);
         }
+
+        /// <summary>RegionWorldBuilder now creates all five region tilemaps at runtime
+        /// from regions.json — the hand-baked StarlightVale grid is superseded.</summary>
+        public static void Phase2RemoveBakedGrid()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath);
+            var baked = GameObject.Find("StarlightVale");
+            if (baked != null)
+            {
+                Object.DestroyImmediate(baked);
+                Debug.Log("[Phase2] removed baked StarlightVale grid (runtime builder replaces it)");
+            }
+            else
+            {
+                Debug.LogWarning("[Phase2] baked StarlightVale not found (already removed?)");
+            }
+            EditorSceneManager.SaveScene(scene);
+            EditorApplication.Exit(0);
+        }
     }
 }
