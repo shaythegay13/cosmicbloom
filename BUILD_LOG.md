@@ -444,6 +444,50 @@ pause sets timeScale 0 and back — all asserted
 
 ---
 
+## Phase 10 — Save/load full coverage + backend validation (2026-07-05 ~06:50)
+
+**Built:**
+- Snapshot fields added (all validator-safe extras): `playerX/playerY/hasPlayerPos`
+  (position restore), `timeOfDay/dayNumber` (world clock persistence) — on top of
+  the phase-by-phase additions (`npcsMet`, `activeQuests`, `questStepIndex`,
+  `questStepProgress`, `selectedTools`).
+- `SaveManager.BeforeWrite` event: live systems stamp the snapshot at write time;
+  `GameBootstrap` restores player position + clock on load and subscribes the stamper.
+- `TimeManager.SetDayNumber` for clock restore.
+
+**Verification evidence:**
+1. **Cross-process reload** (the headless equivalent of "close and reopen the
+   Editor"): writer test ran in one Unity process (`test_results_p10a2.xml` 1/1),
+   reader in a **fresh process** (`test_results_p10b2.xml` 1/1):
+   `[P10Test-B] every field verified after cross-process reload ✓` — coins,
+   plots+crop+water state in two regions, restoration 33.5, landmark, quest
+   progress (q_green_thumb @4), npcsMet, tools+selection, animals, player pos
+   (12.25, 8.75), timeOfDay 0.42, dayNumber 3 — each asserted before/after.
+2. **Real backend round-trip** — MongoDB isn't installed on this machine and no
+   MONGODB_URI exists, so the server had never run here. Solution *without
+   touching server code*: `mongodb-memory-server` (already one of the backend's
+   own declared dependencies) on port 27777 + a temporary `.env`, then
+   `node server/index.js`. Register (201) → `POST /api/game/save` with the real
+   Unity-written snapshot → **200 "Game saved"** through the actual
+   `validateSnapshot` → `GET /api/game/load` → **byte-identical diff, 0 mismatches**.
+   Bonus finding: the server's last-write-wins correctly rejected a stale
+   lower-`saveVersion` snapshot during rehearsal ("Stale save ignored").
+   Cleanup done: server + memdb stopped, temp `.env` and launcher deleted —
+   backend repo pristine.
+3. Size headroom: full snapshot is ~1KB; worst case (all 320 designed plots
+   with crops) lands well under both the 1000-plots/farm and 300KB caps.
+4. **Definition-of-done playthrough** ran as a PlayMode test
+   (`FullPlaythroughTests`, part of the 36/36 in `test_results_p10a.xml`):
+   `[Playthrough] DONE — vale 27.0% | sun 4.5% | coins=148 level=8 quests=2
+   unlocked=[starlight_vale,sun_garden]` — arrive → quest chain → farm →
+   restoration ≥25 → unlock Sun Garden (paid, real gate) → travel → farm the
+   sun-native crop there. (Coin/XP grind accelerated at quest scale; every
+   mechanic in the loop is the real implementation.)
+
+**Phase 10: COMPLETE ✅**
+
+---
+
 ## Incident — Unity Hub auto-relaunched the Editor (2026-07-05 ~04:05)
 
 The first Phase 7 test batch aborted at startup (return code 1): a GUI Unity

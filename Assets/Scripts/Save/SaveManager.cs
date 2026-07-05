@@ -75,9 +75,14 @@ namespace CosmicBloom.Save
 
         void OnApplicationQuit() => WriteLocal();
 
+        /// <summary>Live systems (player position, time of day) stamp the snapshot
+        /// here just before each write.</summary>
+        public static event System.Action<SaveSnapshot> BeforeWrite;
+
         public void WriteLocal()
         {
             _dirtyTimer = -1f;
+            BeforeWrite?.Invoke(State.Save);
             File.WriteAllText(SavePath, State.Save.ToJson());
         }
 

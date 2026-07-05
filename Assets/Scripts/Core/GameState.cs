@@ -57,6 +57,11 @@ namespace CosmicBloom.Core
         public Dictionary<string, int> questStepIndex = new();       // questId -> current step
         public Dictionary<string, int> questStepProgress = new();    // questId -> counter within step
         public Dictionary<string, string> selectedTools = new();      // action -> chosen tool id
+        public float playerX;             // world position, restored on load
+        public float playerY;
+        public bool hasPlayerPos;         // false on fresh saves -> spawn at region center
+        public float timeOfDay = 0.3f;    // TimeManager clock persistence
+        public int dayNumber = 1;
         public bool fullGameUnlocked;                       // cb_full_unlock entitlement
         public List<string> cosmeticsOwned = new();
         public Dictionary<string, FarmState> farms = new();

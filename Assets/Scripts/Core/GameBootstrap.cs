@@ -45,6 +45,21 @@ namespace CosmicBloom.Core
             NpcSpawner.SpawnAll(regions, save != null ? save.State : null);   // all 50, data-placed
             SpawnPlayer(regions);
             AttachCamera();
+
+            if (save != null)
+            {
+                var snap = save.State.Save;
+                if (snap.hasPlayerPos && Player != null)
+                    Player.transform.position = new Vector3(snap.playerX, snap.playerY, 0f);
+                if (TimeManager.Instance != null)
+                {
+                    TimeManager.Instance.timeOfDay = snap.timeOfDay;
+                    TimeManager.Instance.SetDayNumber(snap.dayNumber);
+                }
+
+                Save.SaveManager.BeforeWrite -= StampSnapshot;
+                Save.SaveManager.BeforeWrite += StampSnapshot;
+            }
             DayNightLighting.Create();   // global Light2D driven by TimeManager
 
             if (save != null)
@@ -60,6 +75,23 @@ namespace CosmicBloom.Core
                 Hud = UI.HudUI.Create(save.State, Quests, regions);
             }
         }
+
+        void StampSnapshot(SaveSnapshot snap)
+        {
+            if (Player != null)
+            {
+                snap.playerX = Player.transform.position.x;
+                snap.playerY = Player.transform.position.y;
+                snap.hasPlayerPos = true;
+            }
+            if (TimeManager.Instance != null)
+            {
+                snap.timeOfDay = TimeManager.Instance.timeOfDay;
+                snap.dayNumber = TimeManager.Instance.DayNumber;
+            }
+        }
+
+        void OnDestroy() => Save.SaveManager.BeforeWrite -= StampSnapshot;
 
         static System.Collections.IEnumerator GrowthTick(Farming.FarmingSystem farming)
         {

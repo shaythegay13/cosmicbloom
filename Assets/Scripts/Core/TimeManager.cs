@@ -23,6 +23,9 @@ namespace CosmicBloom.Core
         public bool IsDay => !IsNight;
         public int DayNumber { get; private set; } = 1;
 
+        /// <summary>Restore the persisted day counter on load.</summary>
+        public void SetDayNumber(int day) => DayNumber = Mathf.Max(1, day);
+
         public event Action OnSunrise;
         public event Action OnNightfall;
         public event Action<int> OnNewDay;
