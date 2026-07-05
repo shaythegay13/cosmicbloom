@@ -64,6 +64,7 @@ namespace CosmicBloom.Core
         public int dayNumber = 1;
         public bool fullGameUnlocked;                       // cb_full_unlock entitlement
         public List<string> cosmeticsOwned = new();
+        public List<string> heldItems = new();               // deliver-step quest items (e.g. sealed_crate)
         public Dictionary<string, FarmState> farms = new();
 
         public string ToJson() => JsonConvert.SerializeObject(this);

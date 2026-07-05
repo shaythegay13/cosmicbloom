@@ -72,6 +72,18 @@ namespace CosmicBloom.Core
 
                 AnimalSpawner.SpawnOwned(save.State, regions);
 
+                // Phase 2: world content reactive to quest step changes — pickups
+                // (collect), explore beacons, and the meteor-shower wait_for/timer.
+                void SyncQuestWorldContent()
+                {
+                    PickupSpawner.Sync(save.State, regions, Quests);
+                    ExploreMarkerSpawner.Sync(Quests);
+                }
+                Quests.OnQuestStarted += _ => SyncQuestWorldContent();
+                Quests.OnProgressChanged += SyncQuestWorldContent;
+                SyncQuestWorldContent();   // resumed saves may already have a collect/explore step active
+                MeteorShowerService.Create();
+
                 Hud = UI.HudUI.Create(save.State, Quests, regions);
             }
         }

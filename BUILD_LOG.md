@@ -2,6 +2,134 @@
 
 ---
 
+## Phase-2 Spec / Phase 2 — quest mechanisms built (2026-07-05 ~12:15)
+
+**Built** (all reuse existing verbs/events, no new architecture — see
+`QUEST_GAP_REPORT.md` for the per-quest rationale):
+- **catch_fish** (q_first_catch): `LandmarkController` keys off a restored
+  landmark's own `unlocks=="fishing"` field (moonlit_pond) — tap-to-catch with
+  an owned fish-action tool, small coin value, fires `GameEvents.FishCaught`.
+- **collect** (q_journals, q_lost_seed, q_crystal_depths, q_star_charts) —
+  real world pickups. New `World.PickupController` (tap → `ItemGranted`) +
+  `World.PickupSpawner`, a reconcile loop keyed by (questId, stepIndex,
+  itemIndex) so resumed saves respawn exactly the remaining items at the same
+  deterministic spots. `QuestEngine.IsAnimalProduce` made public so the
+  spawner and `IsPendingSystemStep` share one animal-produce check.
+- **explore** (q_lost_seed, q_crystal_depths, q_meteor_mystery) — proximity
+  poll in `QuestEngine.PollThresholdSteps`, same shape as the existing
+  `move_to` case. **DECISION**: crystal_cave, crystal_cave_depths, and
+  crash_site don't exist in `regions.json` (verified — no landmark ids
+  match), so `World.ExploreTargets` is a small code-side target-position
+  table (offsets from `starlight_vale`'s bounds center, the home region of
+  every Act-2 giver): crystal_cave (8,-3), crystal_cave_depths (8,-6),
+  crash_site (-8,-3). `World.ExploreMarkerController`/`ExploreMarkerSpawner`
+  give it a visible pulsing beacon.
+- **wait_for** (q_meteor_mystery) — new `Core.MeteorShowerService` fires
+  `GameEvents.MeteorShower` on every `TimeManager.OnNightfall` (a full
+  procedural-event system is out of scope; this only needs the event to occur
+  once, observably, per the gap report). q_comet_chaser's witness_event count
+  is Phase 3 (collapsed), not built here.
+- **deposit_seeds** (q_seed_vault) — `LandmarkController` keys off
+  `unlocks=="lore_journal_2"` (the arboretum) → `QuestEngine.TryDepositSeeds`
+  consumes `count` seeds spread across `kinds` distinct owned crop types.
+- **deliver** (q_pebbles_past) — new `SaveSnapshot.heldItems` field (additive,
+  checked against `server/routes/game.js#validateSnapshot` — only
+  schema/coins/level/farms/size are validated, so this is safe). Quest
+  activation grants the item the moment a `deliver` step becomes current;
+  talking to `step.target` while holding it completes + consumes it.
+- **craft** (q_lantern_light) — **SIMPLIFIED**, user-approved: no recipe
+  system. A one-entry code-side `CraftInputs` table in `QuestEngine` maps
+  `festival_lantern <- star_honey`; each `ItemGranted(star_honey)` (existing
+  bee-produce collection) directly bumps the craft step's progress.
+- **q_toolsmith fix** (user-approved 2026-07-05): `ToolService.EnsureTools`
+  extends the seed auto-buy pattern (`CropSelection.EnsureSeed`) to tools —
+  called from `ToolService.Perform` (the action-execution path), *not* from
+  any UI-query path (the Phase-9 crop-label bug was exactly this mistake for
+  seeds). Any tool for the action being performed that the player's level
+  qualifies for and can afford gets bought automatically. Covers all 5
+  previously-unreachable tools (cosmic_hoe_2/3, solar_watering_can,
+  nebula_mister, star_scythe, alien_harvester).
+- **q_eternal_bloom fix** (user-approved 2026-07-05): `quests_completed` moved
+  from an incremental `Bump()` (needed 59 MORE completions after activation —
+  impossible with 60 total quests) to a threshold poll in
+  `PollThresholdSteps` against `Save.questsCompleted.Count`, matching the
+  `own_tools`/`own_animals` pattern.
+
+**PendingSystemSteps** (still stubbed, unchanged from ruling): `witness_event`,
+`host_festival`, `challenge_run`, `trade_visitors` — all optional Act-4 side
+quests, none block the 47-quest chain. `collect`'s old "non-animal item is
+pending" special case is removed (real pickups now exist for it).
+
+**Verification evidence:**
+- Compile: `Logs/phase2_compile.log` — 0 `error CS` lines.
+- New tests (`Assets/Tests/PlayMode/QuestGapPhase2Tests.cs`, 13 cases, one per
+  mechanism + failure-path cases for fishing-without-rod, deposit-seeds
+  insufficient-variety, and deliver-wrong-target): **13/13 PASS**,
+  `Logs/test_results_p2phase2d.xml`, isolated via
+  `-testFilter "CosmicBloom.Tests.QuestGapPhase2Tests"`. (First isolated run,
+  `test_results_p2phase2c.xml`, was 12/13 — caught a real bug in the test
+  itself: `Object.Destroy` defers to end-of-frame, so the pickup-despawn
+  assertion needed a `yield return null` before checking; not a production
+  bug, fixed in the test.)
+- **Full-suite regression: BLOCKED, not conclusively diagnosed.** Three
+  separate attempts to run the complete PlayMode suite (pre-existing classes
+  + the new Phase 2 tests together) hit native Unity crashes today, each a
+  different signature: (1) a `Camera.Render()` crash inside
+  `CoreUiTests.CaptureEachUiScreen_Portrait` (URP `ScriptableRenderContext`),
+  (2) a hang after crash during Editor shutdown inside
+  `WorkerManagerASIO`/`TcpMessagingServerClientSession` teardown (process
+  stayed alive post-crash-trace and had to be force-killed — confirmed hung,
+  not slow, via `tasklist`), (3) a crash inside
+  `DelayedCallManager::Update → Coroutine::ContinueCoroutine →
+  mono_runtime_invoke`, reproduced twice, including once *after* disabling
+  the AI-Assistant MCP relay (see below) — so the relay is not a confirmed
+  cause of that one. All three coincided with sustained high system RAM
+  usage (a 6GB Unity.exe plus, at times, a multi-GB crash-handler process, on
+  a 16GB-total machine) — **resource exhaustion is a plausible common thread
+  across all three, but this was not conclusively diagnosed.** A `-testFilter`
+  attempt to run the pre-existing classes as a comma-separated list also
+  produced a spurious `test_results_p2full.xml` with `testcasecount="0"` —
+  that is a filter-syntax miss (Unity's `-testFilter` didn't accept the
+  multi-class comma list the way expected), **not a passing regression
+  check** — no tests actually executed in that run; it is not evidence of
+  anything and should not be read as one.
+- **MCP relay investigation (dead end, reverted):** the AI Assistant
+  package's MCP relay (`UserSettings/mcp.json`) auto-starts on every Editor
+  domain load, batchmode included, and its own source comment
+  (`RelayService.SuppressAutoStart`, package `com.unity.ai.assistant`)
+  literally describes "a relay crash can otherwise poison strict LogAssert
+  checks in any concurrently running test" — a strong match for the
+  symptom, but that method is `internal`, not actually callable from project
+  code despite the doc comment (calling it would need reflection into
+  Unity-internal package types, not done). Set `mcp.json`'s `"enabled"` to
+  `false` as a coarser attempt; a `-runTests` run afterward **still crashed
+  at the identical `DelayedCallManager`/`Coroutine` stack, and `[relay]` log
+  lines still appeared** (a client still connected and ran its full 180s
+  auto-shutdown lifecycle) — so the flag does not actually stop the relay's
+  in-Editor timer/coroutine machinery, only some narrower surface. Reverted
+  `mcp.json` back to `"enabled": true` since disabling it had no measured
+  benefit and does disable live Unity MCP connectivity for any external
+  client (Cursor, Claude, etc.) while off.
+- Given the above, Phase 2's mechanism evidence rests on the isolated
+  `QuestGapPhase2Tests` run (13/13, real triggers, not stubs) plus a clean
+  compile. Full cross-suite regression coverage (confirming nothing in
+  `QuestEngine.cs`/`GameEvents.cs`/`ToolService.cs`/`LandmarkController.cs`/
+  `GameBootstrap.cs`/`GameState.cs`/`QuestLogUI.cs` broke the pre-existing
+  Phase 5–11 tests) is outstanding, blocked by this environment issue.
+
+**NEXT STEP (do this first, before any other work, next session):** reboot
+the machine, close everything else, then run the full unfiltered PlayMode
+suite (`-runTests -testPlatform PlayMode`, no `-testFilter`) exactly once
+before starting new work. Treat that single result as the real signal on
+whether this was load/resource exhaustion (clean pass under low memory
+pressure) or a genuine bug (crash recurs even with a clean, otherwise-idle
+machine).
+
+**Phase-2 Spec / Phase 2: quest mechanisms COMPLETE, full regression
+verification OUTSTANDING.**
+
+---
+
 ## Phase-2 Spec / Phase 0 — COMPLETE ✅ (2026-07-05 ~10:40)
 
 **Smoke-test verdict: the game runs on Android.** Non-development IL2CPP APK

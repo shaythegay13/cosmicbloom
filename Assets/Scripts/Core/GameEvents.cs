@@ -17,6 +17,8 @@ namespace CosmicBloom.Core
         public static event Action<string> OnRegionEntered;                 // regionId
         public static event Action<string> OnAnimalBought;                  // animalId
         public static event Action<string> OnItemGranted;                   // itemId (quest rewards)
+        public static event Action OnFishCaught;                            // pond fishing (catch_fish steps)
+        public static event Action OnMeteorShower;                          // scheduled event (wait_for/witness_event)
 
         public static void TalkedTo(string npcId) => OnTalkedTo?.Invoke(npcId);
         public static void CropPlanted(string cropId, string regionId) => OnCropPlanted?.Invoke(cropId, regionId);
@@ -28,6 +30,8 @@ namespace CosmicBloom.Core
         public static void RegionEntered(string regionId) => OnRegionEntered?.Invoke(regionId);
         public static void AnimalBought(string animalId) => OnAnimalBought?.Invoke(animalId);
         public static void ItemGranted(string itemId) => OnItemGranted?.Invoke(itemId);
+        public static void FishCaught() => OnFishCaught?.Invoke();
+        public static void MeteorShower() => OnMeteorShower?.Invoke();
 
         /// <summary>Tests/domain-reload hygiene: drop all subscribers.</summary>
         public static void Clear()
@@ -35,7 +39,7 @@ namespace CosmicBloom.Core
             OnTalkedTo = null; OnCropPlanted = null; OnCropHarvested = null;
             OnPlotTilled = null; OnLandmarkRestored = null; OnRestorationChanged = null;
             OnRegionUnlocked = null; OnRegionEntered = null; OnAnimalBought = null;
-            OnItemGranted = null;
+            OnItemGranted = null; OnFishCaught = null; OnMeteorShower = null;
         }
     }
 }

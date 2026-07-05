@@ -130,7 +130,10 @@ namespace CosmicBloom.UI
             if (!string.IsNullOrEmpty(s.landmark)) label += $" {s.landmark}";
             if (!string.IsNullOrEmpty(s.region)) label += $" {s.region}";
             if (!string.IsNullOrEmpty(s.animal)) label += $" {s.animal}";
+            if (!string.IsNullOrEmpty(s.target)) label += $" {s.target}";
+            if (!string.IsNullOrEmpty(s.@event)) label += $" {s.@event}";
             if (s.threshold > 0) label += $" ≥{s.threshold}";
+            if (s.kinds > 0) label += $" ({s.kinds} kinds)";
             return label;
         }
     }

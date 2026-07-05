@@ -71,10 +71,30 @@ namespace CosmicBloom.Farming
                     yield return new Vector2Int(x + dx, y + dy);
         }
 
+        /// <summary>Auto-buy-on-need (q_toolsmith fix, user-approved 2026-07-05): same
+        /// pattern as CropSelection's seed top-up — no tool shop UI in scope, so any
+        /// tool for this action the player's level qualifies for gets bought the next
+        /// time that action is actually performed. Kept out of ActiveTool/UI-query
+        /// paths (the Phase-9 crop-label bug was exactly this mistake for seeds).</summary>
+        static void EnsureTools(GameState state, string action)
+        {
+            foreach (var t in GameDatabase.Tools.Where(t => t.action == action && t.cost > 0))
+            {
+                if (state.Save.tools.Contains(t.id) || state.Save.level < t.unlockLevel) continue;
+                if (state.SpendCoins(t.cost))
+                {
+                    state.Save.tools.Add(t.id);
+                    state.MarkDirty();
+                    Debug.Log($"[ToolService] auto-bought {t.id} (-{t.cost}c) at level {state.Save.level}");
+                }
+            }
+        }
+
         /// <summary>Run a farm action through the equipped tool's area. Primary cell first;
         /// secondary cells apply only where valid (farmable + action available).</summary>
         public static int Perform(FarmingSystem farming, GameState state, string action, int x, int y, string cropId = null)
         {
+            EnsureTools(state, action);
             var tool = ActiveTool(state, action);
             int tier = tool?.tier ?? 1;
             int done = 0;

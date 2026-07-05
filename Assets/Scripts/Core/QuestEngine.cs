@@ -9,14 +9,32 @@
 //  * Side quests (no inbound `unlocks`) activate the first time the player
 //    talks to their giver NPC.
 //
-// Step support (DECISION, overnight run): step types whose backing systems
-// are in scope run on real events/polling. Types requiring out-of-scope
-// systems (fishing, crafting, festivals, exploration caves, cosmic events,
-// trading) surface in the quest log with an explicit "[skip — system
-// pending]" affordance rather than silently auto-completing, so morning
-// review can see exactly what was stubbed. List: catch_fish, craft, explore,
-// wait_for, witness_event, host_festival, challenge_run, trade_visitors,
-// deposit_seeds, deliver, and collect of non-animal items.
+// Step support: step types whose backing systems are in scope run on real
+// events/polling (see QUEST_GAP_REPORT.md for the Phase-2 build rationale
+// behind each). Types still requiring out-of-scope systems (festivals,
+// challenge runs, trading) surface in the quest log with an explicit
+// "[skip — system pending]" affordance rather than silently auto-completing.
+// List: witness_event, host_festival, challenge_run, trade_visitors —
+// all Act-4 optional side quests, none block the 47-quest main chain.
+//
+// Phase 2 additions (2026-07-05, all reuse existing verbs/events, no new
+// systems — see BUILD_LOG "Phase-2 Spec / Phase 2"):
+//   catch_fish   — LandmarkController.TryFish at a restored "fishing" landmark
+//                  fires GameEvents.FishCaught; Bump("catch_fish") here.
+//   collect      — now spawns real world pickups (World.PickupSpawner) for
+//                  non-animal items too; ItemGranted already drove this.
+//   explore      — proximity poll against ExploreTargets (small code-side
+//                  target-position table — data has no coordinates for
+//                  crystal_cave/crystal_cave_depths/crash_site).
+//   wait_for     — meteor_shower fires on every TimeManager.OnNightfall
+//                  (Core.MeteorShowerService); Bump("wait_for") here.
+//   deposit_seeds— LandmarkController.TryDepositSeeds at the restored
+//                  "lore_journal_2" landmark calls QuestEngine.TryDepositSeeds.
+//   deliver      — quest activation grants Save.heldItems[item]; talking to
+//                  step.target while holding it completes + consumes it.
+//   craft        — SIMPLIFIED (no recipe system, user-approved): a small
+//                  code-side CraftInputs table maps festival_lantern <- star_honey;
+//                  each ItemGranted(star_honey) bumps the matching craft step.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,8 +54,14 @@ namespace CosmicBloom.Core
         // step types that cannot progress without out-of-scope systems
         static readonly HashSet<string> PendingSystemSteps = new()
         {
-            "catch_fish", "craft", "explore", "wait_for", "witness_event",
-            "host_festival", "challenge_run", "trade_visitors", "deposit_seeds", "deliver",
+            "witness_event", "host_festival", "challenge_run", "trade_visitors",
+        };
+
+        // craft simplification: output item -> the raw material that "becomes" it
+        // (no recipe system; see QUEST_GAP_REPORT.md q_lantern_light)
+        static readonly Dictionary<string, string> CraftInputs = new()
+        {
+            { "festival_lantern", "star_honey" },
         };
 
         // in-memory distinct-tracking for talk_to / sell_distinct style steps
@@ -57,7 +81,9 @@ namespace CosmicBloom.Core
             GameEvents.OnLandmarkRestored += (lm, r) => Bump("restore_landmark", s => s.landmark == lm, complete: true);
             GameEvents.OnRegionUnlocked += reg => Bump("unlock_region", s => s.region == reg, complete: true);
             GameEvents.OnAnimalBought += a => Bump("buy_animal", s => s.animal == null || s.animal == a);
-            GameEvents.OnItemGranted += item => Bump("collect", s => s.item == item);
+            GameEvents.OnItemGranted += item => { Bump("collect", s => s.item == item); HandleCraftInput(item); };
+            GameEvents.OnFishCaught += () => Bump("catch_fish", s => true);
+            GameEvents.OnMeteorShower += () => Bump("wait_for", s => s.@event == "meteor_shower", complete: true);
 
             if (!State.Save.questsCompleted.Contains("q_arrival") && ActiveQuests().Count == 0)
                 StartQuest("q_arrival");
@@ -92,11 +118,17 @@ namespace CosmicBloom.Core
         }
 
         public static bool IsPendingSystemStep(QuestStep s) =>
-            s != null && (PendingSystemSteps.Contains(s.type) ||
-                          (s.type == "collect" && !IsAnimalProduce(s.item)));
+            s != null && PendingSystemSteps.Contains(s.type);
 
-        static bool IsAnimalProduce(string item) =>
+        /// <summary>Animal-produce items are collected via AnimalController; everything
+        /// else spawns as a real world pickup (World.PickupSpawner).</summary>
+        public static bool IsAnimalProduce(string item) =>
             item != null && GameDatabase.Animals.Any(a => a.produce == item);
+
+        /// <summary>True if any active quest's current step is of the given type
+        /// (used by World controllers to decide whether to attempt a step-specific action).</summary>
+        public bool HasActiveStepOfType(string type) =>
+            ActiveQuests().Any(id => CurrentStep(id)?.type == type);
 
         // ── activation / completion ───────────────────────────────────────────
 
@@ -116,6 +148,7 @@ namespace CosmicBloom.Core
 
             // cutscene steps present as dialogue immediately
             TryPresentCutscene(id);
+            TryGrantDeliverItem(id);
         }
 
         void TryPresentCutscene(string questId)
@@ -125,6 +158,18 @@ namespace CosmicBloom.Core
             if (step == null || step.type != "cutscene") return;
             string speaker = def.giver != null ? (GameDatabase.Npc(def.giver)?.name ?? "???") : "Mysterious Guide";
             UI.DialogueUI.Show(speaker, def.summary, () => AdvanceStep(questId));
+        }
+
+        /// <summary>deliver steps hand the item over the moment they become current
+        /// (quest activation grants it — no separate pickup/craft for the crate itself).</summary>
+        void TryGrantDeliverItem(string questId)
+        {
+            var step = CurrentStep(questId);
+            if (step == null || step.type != "deliver" || step.item == null) return;
+            if (State.Save.heldItems.Contains(step.item)) return;
+            State.Save.heldItems.Add(step.item);
+            State.MarkDirty();
+            Debug.Log($"[Quest] {questId} granted held item {step.item} for delivery to {step.target}");
         }
 
         /// <summary>Explicit skip for steps whose systems aren't built (quest log button).</summary>
@@ -149,6 +194,7 @@ namespace CosmicBloom.Core
             if (idx >= def.steps.Count) { CompleteQuest(questId); return; }
             Debug.Log($"[Quest] {questId} → step {idx} ({def.steps[idx].type})");
             TryPresentCutscene(questId);
+            TryGrantDeliverItem(questId);
         }
 
         void CompleteQuest(string questId)
@@ -179,9 +225,52 @@ namespace CosmicBloom.Core
             State.Save.activeQuest = def.unlocks;
             State.MarkDirty();
             OnQuestCompleted?.Invoke(def);
-            Bump("quests_completed", s => true);
+            // quests_completed (q_eternal_bloom) is a threshold poll against the
+            // completed-count total, not an incremental counter — see PollThresholdSteps.
+            // Save.questsCompleted already includes questId above, so the poll sees it.
 
             if (def.unlocks != null) StartQuest(def.unlocks);
+        }
+
+        /// <summary>deposit_seeds: consume `count` seeds spread across at least `kinds`
+        /// distinct owned crop types on the first active matching step. Called by
+        /// LandmarkController when a restored "lore_journal_2" landmark is tapped.</summary>
+        public bool TryDepositSeeds()
+        {
+            foreach (var questId in ActiveQuests().ToList())
+            {
+                var step = CurrentStep(questId);
+                if (step == null || step.type != "deposit_seeds") continue;
+
+                var owned = State.Save.seeds.Where(kv => kv.Value > 0).ToList();
+                int total = owned.Sum(kv => kv.Value);
+                int neededCount = Mathf.Max(1, step.count);
+                int neededKinds = Mathf.Max(1, step.kinds);
+                if (owned.Count < neededKinds || total < neededCount) return false;
+
+                int remaining = neededCount;
+                foreach (var kv in owned.OrderByDescending(kv => kv.Value))
+                {
+                    if (remaining <= 0) break;
+                    int take = Mathf.Min(kv.Value, remaining);
+                    State.Save.seeds[kv.Key] -= take;
+                    if (State.Save.seeds[kv.Key] <= 0) State.Save.seeds.Remove(kv.Key);
+                    remaining -= take;
+                }
+                State.MarkDirty();
+                Debug.Log($"[Quest] {questId} deposited {neededCount} seeds across {owned.Count} kinds");
+                AdvanceStep(questId);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>craft simplification: a raw material collection (ItemGranted) directly
+        /// advances any active craft step whose output item maps from it (CraftInputs).</summary>
+        void HandleCraftInput(string producedItem)
+        {
+            foreach (var output in CraftInputs.Where(kv => kv.Value == producedItem).Select(kv => kv.Key).ToList())
+                Bump("craft", s => s.item == output);
         }
 
         /// <summary>Reward items: tools/animals/seeds route to their inventories; story
@@ -242,6 +331,7 @@ namespace CosmicBloom.Core
         void OnTalkedTo(string npcId)
         {
             BumpDistinct("talk_to", npcId, s => s.npcs != null && s.npcs.Contains(npcId));
+            TryDeliver(npcId);
 
             // side quests activate on first chat with their giver
             foreach (var quest in GameDatabase.Quests)
@@ -249,6 +339,24 @@ namespace CosmicBloom.Core
                 if (quest.giver != npcId || IsActive(quest.id) || IsCompleted(quest.id)) continue;
                 bool inChain = GameDatabase.Quests.Any(other => other.unlocks == quest.id);
                 if (!inChain && quest.id != "q_arrival") StartQuest(quest.id);
+            }
+        }
+
+        /// <summary>deliver: talking to a step's target while holding its item completes
+        /// the step and consumes the item (quest activation granted it, see
+        /// TryGrantDeliverItem).</summary>
+        void TryDeliver(string npcId)
+        {
+            foreach (var questId in ActiveQuests().ToList())
+            {
+                var step = CurrentStep(questId);
+                if (step == null || step.type != "deliver" || step.target != npcId) continue;
+                if (!State.Save.heldItems.Contains(step.item)) continue;
+
+                State.Save.heldItems.Remove(step.item);
+                State.MarkDirty();
+                Debug.Log($"[Quest] {questId} delivered {step.item} to {npcId}");
+                AdvanceStep(questId);
             }
         }
 
@@ -276,7 +384,8 @@ namespace CosmicBloom.Core
         }
 
         /// <summary>Threshold/state steps evaluated by polling: soil_above,
-        /// restoration_above, own_animals, own_tools, move_to.</summary>
+        /// restoration_above, own_animals, own_tools, move_to, explore,
+        /// quests_completed.</summary>
         void PollThresholdSteps()
         {
             if (State == null) return;
@@ -302,6 +411,26 @@ namespace CosmicBloom.Core
 
                     case "own_tools":
                         if (State.Save.tools.Count >= Mathf.Max(1, step.count)) AdvanceStep(questId);
+                        break;
+
+                    // q_eternal_bloom fix (user-approved 2026-07-05): a threshold poll
+                    // against the total completed-quest count, not an incremental
+                    // per-completion counter — the old Bump() approach needed 59 MORE
+                    // completions after activation, which is impossible with 60 total.
+                    case "quests_completed":
+                        if (State.Save.questsCompleted.Count >= Mathf.Max(1, step.count)) AdvanceStep(questId);
+                        break;
+
+                    // explore: proximity to a code-side target position (data has no
+                    // coordinates for crystal_cave / crystal_cave_depths / crash_site —
+                    // see World.ExploreTargets). Same polling shape as move_to below.
+                    case "explore":
+                        if (World.ExploreTargets.TryGetPosition(step.target, out var targetPos))
+                        {
+                            var explorer = FindFirstObjectByType<World.PlayerController>();
+                            if (explorer != null && Vector2.Distance(explorer.transform.position, targetPos) < 3f)
+                                AdvanceStep(questId);
+                        }
                         break;
 
                     case "move_to":

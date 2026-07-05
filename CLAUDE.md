@@ -52,6 +52,11 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
   cost data but no acquisition path — q_toolsmith is un-completable without it);
   quests_completed evaluator must be a threshold poll, not an incremental counter
   (q_eternal_bloom impossible as-is).
+- q_toolsmith fix (user-approved 2026-07-05): same pattern as the seed economy —
+  extend the existing auto-buy-on-need logic to tools. No tool vendor, no shop UI.
+- q_eternal_bloom fix (user-approved 2026-07-05): pure evaluator logic — poll
+  total-quests-completed-to-date instead of counting incrementally from quest
+  activation. No design input needed, mechanical fix only.
 
 ## Out of scope — don't build unless explicitly asked
 Monetization/IAP, final commissioned art, store compliance, audio, cutscene polish beyond dialogue, multiplayer, localization.

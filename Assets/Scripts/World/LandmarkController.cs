@@ -3,8 +3,14 @@
 // Tap when in range: pay restoreCost coins → restored (persisted in
 // FarmState.landmarksRestored) → GameEvents.LandmarkRestored feeds
 // restore_landmark quest steps.
+//
+// Phase 2: once restored, a landmark's own `unlocks` string (already in data)
+// doubles as a behavior key — "fishing" turns the pond into a fish-catching
+// tap point, "lore_journal_2" (the arboretum) accepts seed deposits. No new
+// per-landmark ids added; both checks key off the field regions.json already has.
 using CosmicBloom.Core;
 using CosmicBloom.Data;
+using System.Linq;
 using UnityEngine;
 
 namespace CosmicBloom.World
@@ -58,6 +64,8 @@ namespace CosmicBloom.World
         {
             if (Restored)
             {
+                if (Def.unlocks == "fishing") { TryFish(); return; }
+                if (Def.unlocks == "lore_journal_2" && TryDepositSeeds()) return;
                 UI.DialogueUI.Show(Def.name, $"{Def.name} hums with restored starlight. ({Def.unlocks})");
                 return;
             }
@@ -75,6 +83,42 @@ namespace CosmicBloom.World
             {
                 UI.DialogueUI.Show(Def.name, $"Restoring {Def.name} needs {Def.restoreCost} coins. Keep farming!");
             }
+        }
+
+        /// <summary>Fishing action at a restored "fishing" landmark (the moonlit pond).
+        /// Requires an owned fish-action tool (fishing_rod, quest-granted at 0 cost).</summary>
+        void TryFish()
+        {
+            bool hasRod = GameDatabase.Tools.Any(t => t.action == "fish" && _state.Save.tools.Contains(t.id));
+            if (!hasRod)
+            {
+                UI.DialogueUI.Show(Def.name, "The water ripples invitingly, but you have no fishing rod.");
+                return;
+            }
+            const int coins = 8;   // small per-catch value (no fish price data)
+            _state.AddCoins(coins);
+            GameEvents.FishCaught();
+            Debug.Log($"[Landmark] fish caught at {Def.id} (+{coins}c)");
+            UI.DialogueUI.Show(Def.name, $"You catch a shimmering fish! (+{coins} coins)");
+        }
+
+        /// <summary>Deposit-seeds action at a restored "lore_journal_2" landmark (the
+        /// arboretum). Delegates the inventory check/consumption to the quest engine,
+        /// which owns Save.seeds. Returns false (falls through to flavor text) when
+        /// there's no active deposit_seeds step or the pouch doesn't qualify yet.</summary>
+        bool TryDepositSeeds()
+        {
+            var quests = FindFirstObjectByType<QuestEngine>();
+            if (quests == null) return false;
+            if (!quests.HasActiveStepOfType("deposit_seeds")) return false;
+
+            if (quests.TryDepositSeeds())
+            {
+                UI.DialogueUI.Show(Def.name, "You stock the seed vault with seeds from your pouch.");
+                return true;
+            }
+            UI.DialogueUI.Show(Def.name, "The seed vault needs more variety — bring seeds from at least 3 different crops.");
+            return true;
         }
     }
 }
