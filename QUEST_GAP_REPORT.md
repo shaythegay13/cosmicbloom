@@ -170,6 +170,24 @@ The four Act-4 side quests are explicitly optional endgame repeatables.
 **No stop-condition triggered** — but per the spec, Phase 1 halts here for
 review regardless.
 
+## Addendum (2026-07-05, post-review) — inventory of the 9 remaining side quests
+
+Per review instruction: verified each *completes via its real trigger*, not just
+that its step type has an evaluator. Result: **7 of 9 genuinely completable,
+2 broken in ways the first pass didn't catch:**
+
+| Quest | Step | Verdict |
+|---|---|---|
+| q_master_gardener | harvest_any ×500 | ✅ completable (grindy by design) |
+| q_menagerie | own_animals ×10 | ✅ completable (15 animals, RanchUI buys) |
+| **q_toolsmith** | own_tools ×10 | ❌ **BROKEN — no acquisition path for 5 of 10 tools.** cosmic_hoe_2/3, nebula_mister, star_scythe, alien_harvester have `cost`+`unlockLevel` data but nothing sells tools (same gap class seeds/animals had — they got auto-buy/RanchUI; tools got nothing). Needs a tool-shop affordance in Phase 2. |
+| q_seed_baron | sell_any ×1000 | ✅ completable (harvest-sale counter) |
+| q_perfect_soil | soil_above 100 ×20 | ✅ completable (soil clamps at 100; fresh/fallow plots reach it) |
+| q_night_owl | harvest_at_night ×50 | ✅ completable |
+| q_legacy_begins | cutscene | ✅ completable |
+| q_constellation_map | harvest_crop starfruit ×12 | ✅ completable (starfruit exists in crops.json, star_garden) |
+| **q_eternal_bloom** | quests_completed ×59 | ❌ **BROKEN — evaluator-design bug, not data.** The engine counts completions *incrementally after activation*; needing 59 more post-activation completions out of 60 total is impossible. Must be a threshold poll against `questsCompleted.Count` (same pattern as own_tools). One-line fix, Phase 2. |
+
 ## Summary table
 
 | Quest | Chain pos | Type | Recommendation |

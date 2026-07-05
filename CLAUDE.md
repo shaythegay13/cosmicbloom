@@ -36,6 +36,23 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Tool tiers: till t3=3×1, water t2=+4 neighbors/t3=3×3, harvest t1=1×2/t2=3×3.
 - `GameConfig.CharityEnabled` stays `false`. Don't touch it.
 
+### Quest stub rulings (user-approved 2026-07-05 — see QUEST_GAP_REPORT.md)
+- BUILD (Phase 2): fishing (ToolService action at restored moonlit_pond), world
+  pickups (collect), explore proximity markers, wait_for scheduled events
+  (meteor_shower = shared infra, built ONCE), deposit_seeds (arboretum check),
+  deliver (talk_to + item-held). Plus q_lantern_light's crafting SIMPLIFIED to
+  star_honey→festival_lantern conversion (no recipe system) — Phase 2, not 3.
+- Explore targets (crystal_cave, crystal_cave_depths, crash_site) don't exist in
+  regions.json — a code-side target-position table is the approved approach; log
+  its coordinates as a DECISION in BUILD_LOG when built.
+- BUILD (collapsed Phase 3): q_comet_chaser (count meteor-shower firings) and
+  q_festival_circuit (per-garden talk_to+harvest, mirroring q_festival's own
+  data pattern). LEAVE STUBBED: q_challenge_sprout, q_galactic_traders.
+- Phase-2 fixes from the side-quest inventory: tool-shop affordance (5 tools have
+  cost data but no acquisition path — q_toolsmith is un-completable without it);
+  quests_completed evaluator must be a threshold poll, not an incremental counter
+  (q_eternal_bloom impossible as-is).
+
 ## Out of scope — don't build unless explicitly asked
 Monetization/IAP, final commissioned art, store compliance, audio, cutscene polish beyond dialogue, multiplayer, localization.
 
