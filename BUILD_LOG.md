@@ -244,4 +244,56 @@ night-only NPC hidden at noon / visible at night; day NPC inverse — asserted
 
 ---
 
+## Phase 5 — Generic quest engine (2026-07-05 ~01:40)
+
+**Built:**
+- `Core/QuestEngine.cs` — ONE engine for all 60 quests; structure/triggers/rewards
+  exclusively from quests.json. Event-driven step evaluators (via GameEvents) for
+  clear_plots / plant_crop / harvest_crop / harvest_any / harvest_at_night /
+  sell_any / sell_distinct / talk_to / restore_landmark / unlock_region /
+  buy_animal / collect(animal produce), plus 1 Hz polling for threshold steps
+  (soil_above, restoration_above, own_animals, own_tools, move_to). Cutscene steps
+  present as dialogue and complete on dismiss.
+- **DECISION — activation model:** `q_arrival` auto-starts on a fresh save; a
+  completed quest auto-activates its `unlocks` successor (the 47-quest chain);
+  side quests (no inbound `unlocks`) activate on first chat with their giver NPC.
+- **DECISION — sale steps:** `FarmingSystem` sells on harvest (web-game behavior,
+  no market UI in scope), so `sell_any`/`sell_distinct` count harvests.
+- **DECISION — out-of-scope-system steps** (catch_fish, craft, explore, wait_for,
+  witness_event, host_festival, challenge_run, trade_visitors, deposit_seeds,
+  deliver, collect of non-animal items): the quest log surfaces an explicit
+  "Skip step (system pending — overnight stub)" button instead of silently
+  auto-completing. Every skip logs a warning. The 47-quest chain includes a few
+  of these (first at quest #7, `q_first_catch`/fishing) — morning review decides
+  whether to build those systems or keep the stubs.
+- **DECISION — reward items routing:** tool ids → `tools`, `pet_*`/animal ids →
+  `animals`, crop ids → `seeds`, everything else (trophies/story items like
+  `celestial_atlas`, `legacy_mode`) → `cosmeticsOwned` (existing snapshot list).
+- `UI/QuestLogUI.cs` — active quests with per-step progress + completed count
+  (floating "Quests" button until the Phase 9 HUD).
+- `World/LandmarkController.cs` + `LandmarkSpawner.cs` — all 17 landmarks from
+  regions.json spawn as interactables; restoring costs `restoreCost` coins,
+  persists in `FarmState.landmarksRestored`, feeds restore_landmark steps.
+- Save fields added (validator-safe): `activeQuests`, `questStepIndex`,
+  `questStepProgress` (+ `npcsMet` from Phase 4).
+
+**Verification evidence** (`Logs/test_results_p5b.xml`):
+```
+total: 17 passed: 17 failed: 0
+[Quest] started q_arrival → cutscene shown → move_to completed by walking to the core
+[Quest] COMPLETED q_arrival (+0c, +10xp, tools granted per data)
+[Quest] q_first_sprout: clear_plots(3)→plant_crop(5)→harvest_crop(1) all via real farming
+[Quest] COMPLETED q_first_sprout (+50c, +25xp, axe granted)
+[Quest] q_soil_secrets: plant 2 clover_cover + soil_above(60)×2 poll
+[P5Test] chain state: completed=[q_arrival,q_first_sprout,q_soil_secrets] active=[q_green_thumb]
+[P5Test] side quest q_master_gardener activated via lumina
+```
+**Three sequential main-chain quests completed via real triggers, each unlocking
+the next** (spec bar: ≥3 ✓). Progress state survives a JSON snapshot roundtrip
+(asserted). Rewards match quests.json exactly.
+
+**Phase 5: COMPLETE ✅**
+
+---
+
 

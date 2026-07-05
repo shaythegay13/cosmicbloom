@@ -13,6 +13,8 @@ namespace CosmicBloom.Core
     {
         public PlayerController Player { get; private set; }
         public Dictionary<string, Grid> RegionGrids { get; private set; }
+        public QuestEngine Quests { get; private set; }
+        UI.QuestLogUI _questLog;
 
         void Start()
         {
@@ -43,6 +45,24 @@ namespace CosmicBloom.Core
             NpcSpawner.SpawnAll(regions, save != null ? save.State : null);   // all 50, data-placed
             SpawnPlayer(regions);
             AttachCamera();
+
+            if (save != null)
+            {
+                LandmarkSpawner.SpawnAll(regions, save.State);
+                Quests = gameObject.GetComponent<QuestEngine>() != null
+                    ? gameObject.GetComponent<QuestEngine>()
+                    : gameObject.AddComponent<QuestEngine>();
+                Quests.Bind(save.State);
+
+                // floating quest-log toggle until the Phase 9 HUD replaces it
+                _questLog = UI.QuestLogUI.Create(Quests);
+                var button = UI.UIRoot.MakeButton(UI.UIRoot.Canvas.transform, "QuestsButton", "Quests",
+                    () => _questLog.Toggle());
+                var rt = (RectTransform)button.transform;
+                rt.anchorMin = new Vector2(0.74f, 0.935f);
+                rt.anchorMax = new Vector2(0.98f, 0.988f);
+                rt.offsetMin = rt.offsetMax = Vector2.zero;
+            }
         }
 
         static System.Collections.IEnumerator GrowthTick(Farming.FarmingSystem farming)
