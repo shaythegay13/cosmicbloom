@@ -1,5 +1,5 @@
 // Cosmic Bloom — Phase 2 minimal scheduled event (q_meteor_mystery's wait_for
-// step; q_comet_chaser's witness_event count is Phase 3). A full procedural
+// step; q_comet_chaser's witness_event counts the same firings). A full procedural
 // event system is out of scope (GDD lists it under "future"); this just needs
 // the event to occur once, observably. Reuses TimeManager.OnNightfall — a
 // meteor shower streaks over every night, firing GameEvents.MeteorShower.

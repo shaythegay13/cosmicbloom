@@ -2,6 +2,71 @@
 
 ---
 
+## Phase-2 Spec / Phase 3 — collapsed phase: q_comet_chaser + q_festival_circuit (2026-07-05 ~17:45)
+
+Both builds follow the user-approved rulings verbatim (QUEST_GAP_REPORT.md /
+CLAUDE.md "Quest stub rulings") — no new systems, no new events, no data changes.
+
+- **witness_event** (q_comet_chaser ×5): the existing `GameEvents.OnMeteorShower`
+  subscription in `QuestEngine.Bind` now also runs
+  `Bump("witness_event", s => s.@event == "meteor_shower")` alongside the
+  Phase-2 `wait_for` completion — witnessing = counting firings of the same
+  `MeteorShowerService` nightfall event. Progress rides the save-backed
+  `questStepProgress` counter.
+- **host_festival** (q_festival_circuit ×4): **SIMPLIFIED** per q_festival's own
+  data precedent (its steps express festival-running as `harvest_any` +
+  `talk_to` 4 NPCs). New `QuestEngine.HandleFestivalTalk` on the existing
+  `OnTalkedTo` event: talking to **4 distinct NPCs of one Sacred Garden within
+  a single in-game day** (`TimeManager.DayNumber`; a day rollover restarts
+  partial tallies) hosts that garden's festival; `step.count` (4) distinct
+  gardens complete the step, reusing the `_distinct` set + progress shape of
+  `BumpDistinct`.
+  - **DECISION (mechanical):** Sacred Gardens = the four **act-3 regions**
+    (sun/moon/star/nebula_garden) — matched from `regions.json` by `act == 3`,
+    no hardcoded id list. Per-garden talk quota = **4**, mirroring q_festival's
+    own `talk_to` list of 4 NPCs. The `host_festival` step data carries no
+    harvest quota, so none is imposed (the ruling's "+ harvest quota if the
+    data specifies it" branch is vacuous here).
+  - Same known limitation as `talk_to`: the in-memory tally/hosted-set resets on
+    reload (existing precedent, not new behavior; hosted-garden *count* persists
+    in `questStepProgress` but the garden identities don't).
+- `PendingSystemSteps` shrinks to `challenge_run` + `trade_visitors`
+  (q_challenge_sprout / q_galactic_traders — LEAVE STUBBED per ruling); the
+  quest-log skip affordance disappears for the two built types automatically,
+  and `QuestLogUI` renders their `[x/5]` / `[x/4]` progress generically with
+  no UI changes.
+
+**Verification evidence:**
+- Compile: `Logs/phase3_compile.log` — 0 `error CS` lines.
+- New tests (`Assets/Tests/PlayMode/QuestGapPhase3Tests.cs`, 6 cases):
+  **6/6 PASS**, `Logs/test_results_p3phase3a.xml`, isolated via
+  `-testFilter "CosmicBloom.Tests.QuestGapPhase3Tests"`. Coverage: 5 direct
+  event firings complete q_comet_chaser (+1400c reward asserted); 5 **real
+  `TimeManager` nightfalls** drive the full
+  TimeManager→MeteorShowerService→GameEvents→QuestEngine pipeline end-to-end;
+  4-garden circuit completes q_festival_circuit (festival_master_banner in
+  `cosmeticsOwned` asserted); same-garden repeats don't double-count;
+  starlight_vale (act-1) NPCs don't count; day rollover restarts a 3-of-4
+  partial tally, then a full 4-NPC circuit within the new day hosts.
+  (First `-runTests` attempt exited rc=1 in ~1s right after licensing logged
+  "Access token is unavailable" — `Logs/phase3_tests.log`; transient, the
+  identical rerun proceeded normally. Also: `Logs/test_results_p3.xml` was a
+  **stale 7/4 file from an earlier session** that a first look misread as this
+  run's output — deleted; the timestamped `*_p3phase3a` names avoid the trap.)
+- Full-suite regression (same split as Phase 2):
+  - Non-render half (`-nographics`), Phase-2 filter list + the new class —
+    **53/53 PASS** (47 prior + 6 new), `Logs/p3_split_nographics.xml`.
+  - Render-requiring half (5 screenshot tests, no `-nographics`, using the
+    corrected `MobileScreenTests.CaptureTallPhoneHud` name so all 5 fit one
+    invocation): **5/5 PASS**, `Logs/p3_split_render.xml`.
+  - **Total: 58/58 PASS, 0 failures** — nothing in the QuestEngine changes
+    broke any pre-existing test, and all 6 new Phase 3 tests are included.
+
+**Phase-2 Spec / Phase 3: COMPLETE.** Remaining stubbed quests (by ruling, not
+omission): q_challenge_sprout, q_galactic_traders.
+
+---
+
 ## Phase-2 Spec / Phase 2 — quest mechanisms built (2026-07-05 ~12:15)
 
 **Built** (all reuse existing verbs/events, no new architecture — see

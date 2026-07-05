@@ -45,9 +45,13 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Explore targets (crystal_cave, crystal_cave_depths, crash_site) don't exist in
   regions.json — a code-side target-position table is the approved approach; log
   its coordinates as a DECISION in BUILD_LOG when built.
-- BUILD (collapsed Phase 3): q_comet_chaser (count meteor-shower firings) and
-  q_festival_circuit (per-garden talk_to+harvest, mirroring q_festival's own
-  data pattern). LEAVE STUBBED: q_challenge_sprout, q_galactic_traders.
+- BUILT (collapsed Phase 3, 2026-07-05): q_comet_chaser — witness_event counts
+  firings of the same meteor_shower event wait_for uses; q_festival_circuit —
+  host_festival simplified per q_festival's own data pattern (4 distinct NPCs
+  of one Sacred Garden — the four act-3 regions — within one in-game day = one
+  festival; the step data carries no harvest quota, so none is imposed).
+  LEAVE STUBBED: q_challenge_sprout, q_galactic_traders — challenge_run and
+  trade_visitors are now the only PendingSystemSteps.
 - Phase-2 fixes from the side-quest inventory: tool-shop affordance (5 tools have
   cost data but no acquisition path — q_toolsmith is un-completable without it);
   quests_completed evaluator must be a threshold poll, not an incremental counter

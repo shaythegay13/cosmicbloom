@@ -11,11 +11,11 @@
 //
 // Step support: step types whose backing systems are in scope run on real
 // events/polling (see QUEST_GAP_REPORT.md for the Phase-2 build rationale
-// behind each). Types still requiring out-of-scope systems (festivals,
-// challenge runs, trading) surface in the quest log with an explicit
-// "[skip — system pending]" affordance rather than silently auto-completing.
-// List: witness_event, host_festival, challenge_run, trade_visitors —
-// all Act-4 optional side quests, none block the 47-quest main chain.
+// behind each). Types still requiring out-of-scope systems (challenge runs,
+// trading) surface in the quest log with an explicit "[skip — system pending]"
+// affordance rather than silently auto-completing.
+// List: challenge_run, trade_visitors — both Act-4 optional side quests,
+// neither blocks the 47-quest main chain (LEAVE STUBBED per Phase-3 ruling).
 //
 // Phase 2 additions (2026-07-05, all reuse existing verbs/events, no new
 // systems — see BUILD_LOG "Phase-2 Spec / Phase 2"):
@@ -35,6 +35,18 @@
 //   craft        — SIMPLIFIED (no recipe system, user-approved): a small
 //                  code-side CraftInputs table maps festival_lantern <- star_honey;
 //                  each ItemGranted(star_honey) bumps the matching craft step.
+//
+// Phase 3 additions (2026-07-05, collapsed phase — both reuse Phase-2 infra,
+// user-approved rulings in QUEST_GAP_REPORT.md / CLAUDE.md):
+//   witness_event — counts firings of the SAME GameEvents.MeteorShower that
+//                   wait_for completes on (q_comet_chaser ×5). No new events.
+//   host_festival — SIMPLIFIED per q_festival's own data precedent: talking
+//                   to FestivalTalkQuota distinct NPCs of one Sacred Garden
+//                   (the four act-3 regions) within a single in-game day
+//                   (TimeManager.DayNumber) hosts that garden's festival;
+//                   step.count distinct gardens complete the step
+//                   (q_festival_circuit ×4). The step data carries no harvest
+//                   quota, so none is imposed.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,9 +64,11 @@ namespace CosmicBloom.Core
         public event Action OnProgressChanged;
 
         // step types that cannot progress without out-of-scope systems
+        // (q_challenge_sprout / q_galactic_traders — LEAVE STUBBED per the
+        // Phase-3 ruling; witness_event/host_festival built in Phase 3)
         static readonly HashSet<string> PendingSystemSteps = new()
         {
-            "witness_event", "host_festival", "challenge_run", "trade_visitors",
+            "challenge_run", "trade_visitors",
         };
 
         // craft simplification: output item -> the raw material that "becomes" it
@@ -65,7 +79,19 @@ namespace CosmicBloom.Core
         };
 
         // in-memory distinct-tracking for talk_to / sell_distinct style steps
+        // (host_festival reuses it for its hosted-gardens set)
         readonly Dictionary<string, HashSet<string>> _distinct = new();
+
+        // host_festival: q_festival's own talk_to step lists 4 NPCs — the
+        // per-garden quota mirrors that data precedent
+        const int FestivalTalkQuota = 4;
+
+        // host_festival: per-quest, per-garden NPCs talked to today; a day
+        // rollover restarts partial tallies ("within one in-game day")
+        class FestivalTally { public int day; public readonly Dictionary<string, HashSet<string>> talked = new(); }
+        readonly Dictionary<string, FestivalTally> _festival = new();
+
+        static int Today() => TimeManager.Instance != null ? TimeManager.Instance.DayNumber : 1;
 
         float _pollTimer;
 
@@ -83,7 +109,11 @@ namespace CosmicBloom.Core
             GameEvents.OnAnimalBought += a => Bump("buy_animal", s => s.animal == null || s.animal == a);
             GameEvents.OnItemGranted += item => { Bump("collect", s => s.item == item); HandleCraftInput(item); };
             GameEvents.OnFishCaught += () => Bump("catch_fish", s => true);
-            GameEvents.OnMeteorShower += () => Bump("wait_for", s => s.@event == "meteor_shower", complete: true);
+            GameEvents.OnMeteorShower += () =>
+            {
+                Bump("wait_for", s => s.@event == "meteor_shower", complete: true);
+                Bump("witness_event", s => s.@event == "meteor_shower");
+            };
 
             if (!State.Save.questsCompleted.Contains("q_arrival") && ActiveQuests().Count == 0)
                 StartQuest("q_arrival");
@@ -188,6 +218,7 @@ namespace CosmicBloom.Core
             State.Save.questStepIndex[questId] = idx;
             State.Save.questStepProgress[questId] = 0;
             _distinct.Remove(questId);
+            _festival.Remove(questId);
             State.MarkDirty();
             OnProgressChanged?.Invoke();
 
@@ -332,6 +363,7 @@ namespace CosmicBloom.Core
         {
             BumpDistinct("talk_to", npcId, s => s.npcs != null && s.npcs.Contains(npcId));
             TryDeliver(npcId);
+            HandleFestivalTalk(npcId);
 
             // side quests activate on first chat with their giver
             foreach (var quest in GameDatabase.Quests)
@@ -357,6 +389,46 @@ namespace CosmicBloom.Core
                 State.MarkDirty();
                 Debug.Log($"[Quest] {questId} delivered {step.item} to {npcId}");
                 AdvanceStep(questId);
+            }
+        }
+
+        /// <summary>host_festival simplification (user-approved, mirrors q_festival's
+        /// own data pattern): FestivalTalkQuota distinct NPCs of one Sacred Garden
+        /// (the four act-3 regions) within a single in-game day hosts that garden's
+        /// festival; step.count distinct gardens complete the step.</summary>
+        void HandleFestivalTalk(string npcId)
+        {
+            string gardenId = GameDatabase.Npc(npcId)?.region;
+            var garden = gardenId != null ? GameDatabase.Region(gardenId) : null;
+            if (garden == null || garden.act != 3) return;
+
+            foreach (var questId in ActiveQuests().ToList())
+            {
+                var step = CurrentStep(questId);
+                if (step == null || step.type != "host_festival") continue;
+
+                if (!_festival.TryGetValue(questId, out var tally))
+                    _festival[questId] = tally = new FestivalTally { day = Today() };
+                if (tally.day != Today())
+                {
+                    tally.talked.Clear();
+                    tally.day = Today();
+                }
+
+                if (!tally.talked.TryGetValue(gardenId, out var talkedToday))
+                    tally.talked[gardenId] = talkedToday = new HashSet<string>();
+                if (!talkedToday.Add(npcId) || talkedToday.Count < FestivalTalkQuota) continue;
+
+                if (!_distinct.TryGetValue(questId, out var hosted))
+                    _distinct[questId] = hosted = new HashSet<string>();
+                if (!hosted.Add(gardenId)) continue;
+
+                State.Save.questStepProgress[questId] = hosted.Count;
+                State.MarkDirty();
+                OnProgressChanged?.Invoke();
+                Debug.Log($"[Quest] {questId} hosted a festival in {gardenId} " +
+                          $"({hosted.Count}/{Mathf.Max(1, step.count)}, day {tally.day})");
+                if (hosted.Count >= Mathf.Max(1, step.count)) AdvanceStep(questId);
             }
         }
 
