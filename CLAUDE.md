@@ -35,7 +35,7 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Region unlock: coins + level per `regions.json`, NOT a direct restoration threshold. Restoration feeds the economy through quest rewards, not a direct gate.
 - Tool tiers: till t3=3×1, water t2=+4 neighbors/t3=3×3, harvest t1=1×2/t2=3×3.
 - `GameConfig.CharityEnabled` stays `false`. Don't touch it.
-- Animal region distribution (Phase 5, 2026-07-05 — **replaces** Phase 4's
+- Animal region distribution (Phase 4b, 2026-07-05 — **replaces** Phase 4's
   one-home-region model, don't build against that old description if you see
   it elsewhere): `animals.json` has no shared/exclusive field —
   `AnimalSpawner.ExclusiveRegionByAnimal` is a code-side lookup table (same
@@ -45,7 +45,7 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
   Garden, `crater_goat`→Moon Garden, `star_owl`→Star Garden, `nebula_cow` +
   `star_slime`→Nebula Garden (2 exclusives — confirmed from `regions.json` as
   the region last in progression by both `unlockCoins` (6000) and
-  `unlockLevel` (20)). The other 9 animals are shared. See BUILD_LOG.md Phase 5
+  `unlockLevel` (20)). The other 9 animals are shared. See BUILD_LOG.md Phase 4b
   for the full per-animal rationale. `AnimalSpawner.CanSpawnInRegion` is the
   source of truth; `SpawnOwned`/`TryBuy` spawn one instance per eligible
   region, so a shared animal produces from up to 5 simultaneous instances

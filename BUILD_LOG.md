@@ -2,7 +2,7 @@
 
 ---
 
-## Phase 5 — animal shared-pool/exclusive model, replacing Phase 4 (2026-07-05 ~21:10)
+## Phase 4b — animal shared-pool/exclusive model, replacing Phase 4 (2026-07-05 ~21:10)
 
 **Phase 4's one-home-region model is superseded, not layered on top** — see
 "SUPERSEDED" marker on the Phase 4 entry directly below. Per the new spec: most
@@ -55,7 +55,7 @@ region** — 5 instances for a shared animal, 1 for an exclusive.
 
 **Known implication, flagged not fixed:** shared animals now produce coins from
 up to 5 simultaneous instances instead of 1 — up to a 5× income multiplier on
-those 9 animals' produce loop versus the pre-Phase-5 game. This is a direct,
+those 9 animals' produce loop versus the pre-Phase-4b game. This is a direct,
 intended consequence of the user-specified model ("spawnable in all 5
 regions"), not a bug — flagging it here as a balance-relevant fact for whoever
 next tunes economy numbers, not deciding unilaterally to counter-balance it.
@@ -84,14 +84,14 @@ next tunes economy numbers, not deciding unilaterally to counter-balance it.
   PASS** (`Logs/p5_split_nographics.xml`) + **5/5 PASS**
   (`Logs/p5_split_render.xml`) — **61/61 total, 0 failures.**
 
-**Phase 5: COMPLETE.**
+**Phase 4b: COMPLETE.**
 
 ---
 
-## Phase 4 — animal region distribution (2026-07-05 ~20:40) — **SUPERSEDED by Phase 5 above (2026-07-05 ~21:10) — kept for history, do not build on this model**
+## Phase 4 — animal region distribution (2026-07-05 ~20:40) — **SUPERSEDED by Phase 4b above (2026-07-05 ~21:10) — kept for history, do not build on this model**
 
 Original entry preserved as-written below; `AnimalSpawner.HomeRegionByAnimal`
-no longer exists in code as of Phase 5.
+no longer exists in code as of Phase 4b.
 
 **Research (before deciding anything):** `animals.json` has no region/home field.
 `regions.json` and `AnimalSpawner.cs` confirmed all 15 owned animals spawned into
