@@ -148,15 +148,31 @@ namespace CosmicBloom.Tests
             while (state.Save.level < level) state.AddXp(GameState.XpForLevel(state.Save.level));
         }
 
-        // Phase 7: walks the real 47-quest main chain from q_arrival all the way
-        // through q_gates_of_sun's actual unlock_region step (not a direct
-        // RegionUnlockService shortcut, which is what the old ValeToSunGarden_CoreLoop
-        // test above used) and two steps into Act 3 — every step driven through its
-        // real trigger, covering every system Phase 2/3 resolved: fishing,
-        // buy_animal+collect, harvest_at_night, explore, wait_for, deposit_seeds,
-        // deliver, craft, sell_distinct, cutscenes, unlock_region.
+        // Phase 7: walks the real 47-quest main chain from q_arrival for real, through
+        // every trigger Phase 2/3 resolved: fishing, buy_animal+collect,
+        // harvest_at_night, explore, wait_for, deposit_seeds, deliver, craft,
+        // cutscenes. Stops cleanly at q_pebbles_past (#23) — one quest short of
+        // q_trade_routes (#24).
+        //
+        // q_trade_routes ("sell 10 crops of at least 3 kinds") is NOT walked here.
+        // A Phase 7 first pass "fixed" its sell_distinct step to require 10 total
+        // sales across >=3 kinds, on the assumption that 10 DISTINCT kinds was an
+        // impossible ask (no single region has that many crops). That assumption
+        // was wrong and the fix was reverted (Phase 8 pre-check, 2026-07-06): region
+        // unlocking (RegionMapUI -> RegionUnlockService.TryUnlock) is gated only by
+        // level+coins, NOT by quest progress, and the distinct-kind tracking never
+        // resets on travel — so a player who unlocks a second region early (vale's
+        // 6 crops + any other region's 5 = 11) genuinely can reach 10 distinct
+        // kinds. It's a real, if backward, cross-region requirement, not a bug.
+        //
+        // It's also not safely walkable here as a shortcut: unlocking sun_garden
+        // early to farm this quest would make q_gates_of_sun's own unlock_region
+        // step (which only fires GameEvents.RegionUnlocked on an actual state
+        // transition) never complete later, since TryUnlock no-ops once already
+        // unlocked. That's a second, separate finding — flagged for the same
+        // design call rather than papered over. See BUILD_LOG.md for both.
         [UnityTest]
-        public IEnumerator MainChain_ArrivalThroughSunGarden_AllRealQuestSteps()
+        public IEnumerator MainChain_ArrivalThroughPebblesPast_AllRealQuestSteps()
         {
             GameEvents.Clear();
             GameDatabase.LoadAll();
@@ -348,77 +364,14 @@ namespace CosmicBloom.Tests
             GameEvents.TalkedTo("elder_nova");
             Assert.IsTrue(engine.IsCompleted("q_pebbles_past"));
 
-            // ── q_trade_routes (24): sell_distinct kinds:3 count:10 — exercises the
-            // Phase 7 sell_distinct fix (previously required 10 DISTINCT kinds; no
-            // region has that many crops, which made this quest uncompletable)
-            yield return HarvestNTimes(farming, state, 50, 50, "starlight_berry", 6);
-            yield return HarvestNTimes(farming, state, 60, 50, "potato", 2);
-            yield return HarvestNTimes(farming, state, 65, 50, "clover_cover", 2);
-            Assert.IsTrue(engine.IsCompleted("q_trade_routes"),
-                "10 sales across 3 kinds completes q_trade_routes (post-fix)");
-            UI.DialogueUI.Close();
+            // ── q_trade_routes (24) is the real frontier — see the class-level
+            // comment above this test for why it stops here pending a design call.
+            Assert.IsTrue(engine.IsActive("q_trade_routes"), "chain reaches q_trade_routes for real");
 
-            // ── q_star_charts (25): collect chart_fragment x3
-            PickupSpawner.Sync(state, regions, engine);
-            yield return null;
-            var fragments = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
-                .Where(p => p.ItemId == "chart_fragment").ToList();
-            Assert.AreEqual(3, fragments.Count);
-            foreach (var f in fragments) { f.Interact(player); UI.DialogueUI.Close(); }
-            Assert.IsTrue(engine.IsCompleted("q_star_charts"));
-
-            // ── q_festival (26): harvest_any x20, then talk_to 4 npcs
-            yield return HarvestNTimes(farming, state, 100, 50, "starlight_berry", 20);
-            GameEvents.TalkedTo("zyx"); GameEvents.TalkedTo("lumina");
-            GameEvents.TalkedTo("orbit"); GameEvents.TalkedTo("captain_pebble");
-            UI.DialogueUI.Close();
-            Assert.IsTrue(engine.IsCompleted("q_festival"));
-
-            // ── q_lantern_light (27): craft festival_lantern x10 (star_honey simplification)
-            for (int i = 0; i < 10; i++) GameEvents.ItemGranted("star_honey");
-            Assert.IsTrue(engine.IsCompleted("q_lantern_light"));
-
-            // ── q_midnight_visitor (28): cutscene
-            UI.DialogueUI.Close();
-            Assert.IsTrue(engine.IsCompleted("q_midnight_visitor"));
-
-            // ── q_valewide_bloom (29): restoration_above(vale, 75) — already true
-            yield return WaitWhileActive(engine, "q_valewide_bloom");
-            Assert.IsTrue(engine.IsCompleted("q_valewide_bloom"));
-            UI.DialogueUI.Close();
-
-            // ── q_gates_of_sun (30): unlock_region sun_garden — the quest's OWN real
-            // step firing GameEvents.RegionUnlocked, not an ad hoc RegionUnlockService
-            // call bypassing the chain (that was the old test's shortcut, above)
-            EnsureLevel(state, 8);
-            EnsureCoins(state, 1500);
-            Assert.IsTrue(engine.IsActive("q_gates_of_sun"));
-            Assert.IsTrue(RegionUnlockService.TryUnlock(state, "sun_garden"), "paid 1500c at Lv8");
-            Assert.IsTrue(engine.IsCompleted("q_gates_of_sun"), "the quest's own unlock_region step fired");
-            Assert.Contains("sun_garden", state.Save.unlockedRegions);
-            UI.DialogueUI.Close();
-
-            Debug.Log($"[P7Test] main chain complete through quest #30 (q_gates_of_sun) — " +
-                      $"{state.Save.questsCompleted.Count} quests completed, coins={state.Save.coins}, level={state.Save.level}");
-
-            // ── travel to Sun Garden and continue the real Act 3 chain
-            Assert.IsTrue(RegionUnlockService.TravelTo(state, "sun_garden"));
-            Assert.AreEqual("sun_garden", regions.CurrentRegionId);
-
-            // ── q_solar_welcome (31): talk_to solmara/helia/cinder
-            GameEvents.TalkedTo("solmara"); GameEvents.TalkedTo("helia"); GameEvents.TalkedTo("cinder");
-            UI.DialogueUI.Close();
-            Assert.IsTrue(engine.IsCompleted("q_solar_welcome"));
-
-            // ── q_ember_harvest (32): harvest_crop solar_pepper x5 (day-gated crop)
-            time.timeOfDay = 0.5f;   // noon — solar_pepper only grows by day
-            yield return HarvestNTimes(farming, state, 5, 5, "solar_pepper", 5);
-            Assert.IsTrue(engine.IsCompleted("q_ember_harvest"));
-
-            Debug.Log($"[P7Test] DONE — real quest chain walked through #32 (q_ember_harvest, Act 3). " +
+            Debug.Log($"[P7Test] DONE — real quest chain walked through #23 (q_pebbles_past). " +
                       $"Completed=[{string.Join(",", state.Save.questsCompleted)}]");
-            Assert.GreaterOrEqual(state.Save.questsCompleted.Count, 32,
-                "at least the 32 main-chain quests through q_ember_harvest completed");
+            Assert.GreaterOrEqual(state.Save.questsCompleted.Count, 23,
+                "at least the 23 main-chain quests through q_pebbles_past completed");
 
             PickupSpawner.ClearAll();
             ExploreMarkerSpawner.ClearAll();

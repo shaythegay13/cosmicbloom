@@ -91,14 +91,6 @@ namespace CosmicBloom.Core
         class FestivalTally { public int day; public readonly Dictionary<string, HashSet<string>> talked = new(); }
         readonly Dictionary<string, FestivalTally> _festival = new();
 
-        // sell_distinct: total items sold (repeats included) tracked separately from
-        // the distinct-kind set — found via the Phase 7 extended-chain playthrough
-        // that the shared BumpDistinct() path conflated the two, requiring
-        // step.count DISTINCT kinds (q_trade_routes' count:10 exceeds every region's
-        // crop variety, making it uncompletable). Mirrors deposit_seeds' kinds+count split.
-        class SellTally { public readonly HashSet<string> kinds = new(); public int total; }
-        readonly Dictionary<string, SellTally> _sell = new();
-
         static int Today() => TimeManager.Instance != null ? TimeManager.Instance.DayNumber : 1;
 
         float _pollTimer;
@@ -227,7 +219,6 @@ namespace CosmicBloom.Core
             State.Save.questStepProgress[questId] = 0;
             _distinct.Remove(questId);
             _festival.Remove(questId);
-            _sell.Remove(questId);
             State.MarkDirty();
             OnProgressChanged?.Invoke();
 
@@ -363,7 +354,7 @@ namespace CosmicBloom.Core
             Bump("harvest_any", s => true);
             // FarmingSystem sells on harvest, so sale-steps count harvests (no market UI in scope)
             Bump("sell_any", s => true);
-            BumpSellDistinct(cropId);
+            BumpDistinct("sell_distinct", cropId);
             if (TimeManager.Instance != null && TimeManager.Instance.IsNight)
                 Bump("harvest_at_night", s => true);
         }
@@ -438,31 +429,6 @@ namespace CosmicBloom.Core
                 Debug.Log($"[Quest] {questId} hosted a festival in {gardenId} " +
                           $"({hosted.Count}/{Mathf.Max(1, step.count)}, day {tally.day})");
                 if (hosted.Count >= Mathf.Max(1, step.count)) AdvanceStep(questId);
-            }
-        }
-
-        /// <summary>sell_distinct: step.count total sales across at least step.kinds
-        /// distinct crop types (matches deposit_seeds' kinds+count semantics and the
-        /// quest's own "sell N crops of at least K kinds" description).</summary>
-        void BumpSellDistinct(string cropId)
-        {
-            foreach (var questId in ActiveQuests().ToList())
-            {
-                var step = CurrentStep(questId);
-                if (step == null || step.type != "sell_distinct") continue;
-
-                if (!_sell.TryGetValue(questId, out var tally))
-                    _sell[questId] = tally = new SellTally();
-                tally.kinds.Add(cropId);
-                tally.total++;
-
-                State.Save.questStepProgress[questId] = tally.total;
-                State.MarkDirty();
-                OnProgressChanged?.Invoke();
-
-                int neededKinds = Mathf.Max(1, step.kinds);
-                int neededCount = Mathf.Max(1, step.count);
-                if (tally.total >= neededCount && tally.kinds.Count >= neededKinds) AdvanceStep(questId);
             }
         }
 

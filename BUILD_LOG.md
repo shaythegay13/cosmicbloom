@@ -2,14 +2,89 @@
 
 ---
 
+## Phase 8 pre-check — Phase 7's `sell_distinct` fix reverted (2026-07-06 ~02:35)
+
+**Correction to the record below, per explicit instruction to verify before
+starting Phase 8 rather than let a wrong Phase 7 call stand.** Phase 7 treated
+`q_trade_routes`'s `sell_distinct` step (`{kinds:3, count:10}`, requiring 10
+DISTINCT crop kinds under the shared `BumpDistinct` path) as an uncompletable
+bug, on the assumption that no region has 10 crops. That assumption didn't
+account for two things, both confirmed by rereading the actual code:
+1. **Region unlocking is gated only by level + coins, not by quest progress.**
+   `RegionMapUI.OnTapRegion` calls `RegionUnlockService.TryUnlock` directly —
+   there is no check anywhere that q_gates_of_sun (or any quest) must be
+   reached first. A player can unlock Sun Garden the moment they hit Lv8 /
+   1500c, however early that happens.
+2. **The distinct-kind tracking never resets on travel** — it's keyed only by
+   questId, cleared only when the step itself advances. starlight_vale alone
+   has 6 crops; starlight_vale + any second region (5 crops each) is 11,
+   comfortably clearing the count:10 bar.
+
+So the original "10 distinct kinds" requirement, while backward for an Act-2
+quest (it implicitly asks the player to unlock a second region well ahead of
+the main-chain's own q_gates_of_sun), **was genuinely completable** — a real
+cross-region requirement, not a softlock. The Phase 7 fix was wrong to
+override it unilaterally. **Reverted:**
+- `QuestEngine.cs`: removed `SellTally`/`BumpSellDistinct`, restored the
+  original `BumpDistinct("sell_distinct", cropId)` call and the shared
+  distinct-set semantics.
+- `QuestEngineTests.SellDistinct_TotalCountAcrossMinimumKinds_CompletesQTradeRoutes`
+  (tested the now-reverted behavior) removed, along with its now-unused
+  `GrowToHarvestable` helper.
+- `FullPlaythroughTests`' extended chain test renamed
+  `MainChain_ArrivalThroughPebblesPast_AllRealQuestSteps` and trimmed to stop
+  cleanly at q_pebbles_past (#23) — one quest short of q_trade_routes (#24) —
+  instead of forcing through it via a shortcut. Rerun: `Logs/phase8_precheck_test.xml`
+  **1/1 PASS**; full nographics regression (57 tests, list rebuilt from the
+  same Phase 7 list minus the removed unit test, per the reuse rule):
+  `Logs/phase8_split_nographics.xml` — **57/57 PASS**. Render half (6 tests)
+  untouched by this change, not rerun.
+
+**A second, related finding surfaced while checking this — not fixed, flagged
+for the same design call:** `q_gates_of_sun`'s `unlock_region` step only
+completes via a *fresh* `GameEvents.RegionUnlocked` firing
+(`QuestEngine.Bind`: `GameEvents.OnRegionUnlocked += reg => Bump("unlock_region", ...)`).
+`RegionUnlockService.TryUnlock` no-ops silently if the region is already
+unlocked (`IsUnlocked` check short-circuits before the event fires). So a
+player who takes q_trade_routes' implied "unlock a second region early" path
+would unlock Sun Garden *before* q_gates_of_sun's step is ever current — and
+when the chain later reaches q_gates_of_sun, it would **never complete**,
+because the region is already unlocked and the event never refires. This is
+not hypothetical: it's the direct consequence of the one path that makes
+q_trade_routes completable as currently designed. Not fixed here — it's a
+design question (should `unlock_region` steps poll-complete retroactively if
+the target is already unlocked when the step becomes current?) bundled with
+the `q_trade_routes` call below.
+
+**Open for a design call (not decided unilaterally):**
+1. Is `q_trade_routes` meant to require unlocking a second region this early
+   in Act 2 (an unusual pacing beat), or should the data (`kinds`/`count`) or
+   the intended crop pool be reconsidered so it's completable within
+   starlight_vale alone?
+2. Should `unlock_region` quest steps retroactively complete (via a poll,
+   like `restoration_above`/`soil_above`) if the target region is already
+   unlocked by the time the step becomes current — so the early-unlock path
+   `q_trade_routes` implies doesn't permanently strand `q_gates_of_sun`?
+
+No code changes beyond the revert above until this comes back with a
+decision. `MainChain_ArrivalThroughPebblesPast_AllRealQuestSteps` stopping at
+#23 is the accurate "genuinely completable without a design call" frontier
+for now — still well past quest #7, just not through Sun Garden.
+
+---
+
 ## FINAL STATUS — Phase-2 Spec complete, Phases 0–7 (2026-07-06 ~02:20)
 
-**Definition of done met, for real this time.** The extended-chain requirement
-(Phase 7, below) replaces the old milestone — completing q_arrival/q_first_sprout
-then jumping to Sun Garden via a direct `RegionUnlockService` call — with the
-actual 47-quest main chain walked start to finish through q_gates_of_sun's own
-`unlock_region` step (#30) and two steps into Act 3 (#31–32), every step driven
-by its real trigger. See Phase 7 below for the full evidence.
+**Definition of done, corrected (see the Phase 8 pre-check above).** Phase 7
+originally claimed the chain walked for real through q_gates_of_sun's
+`unlock_region` step (#30) and two steps into Act 3 (#31–32). That relied on a
+Phase 7 "fix" to `q_trade_routes` (#24) that was reverted as wrong — see the
+Phase 8 pre-check entry above. The chain-walk that stands today is
+`MainChain_ArrivalThroughPebblesPast_AllRealQuestSteps`, which reaches
+q_pebbles_past (#23) for real and then stops at q_trade_routes deliberately,
+pending the design call logged above. Still a large improvement over the old
+milestone (which completed only 2 quests for real before shortcutting straight
+to Sun Garden), just not as far as Phase 7 first reported.
 
 **Complete:**
 1. Phase 0 — mobile build & runtime smoke test: real Android IL2CPP APK built and
@@ -27,9 +102,11 @@ by its real trigger. See Phase 7 below for the full evidence.
    original one-paddock model).
 6. Phase 5 — Farm&Give art pipeline reused for real crop + NPC sprites.
 7. Phase 6 — UI polish (dialogue/HUD overlap, quest-log truncation).
-8. Phase 7 — full regression (64/64) + the extended-chain playthrough above,
-   plus 2 bugs found and fixed while building it (`sell_distinct`'s uncompletable
-   threshold; `AnimalSpawner`'s missing `ClearAll()`) — see below for both.
+8. Phase 7 — full regression (64/64, then 57/57 nographics after the revert
+   above) + the extended-chain playthrough (now stopping at #23, see above),
+   plus `AnimalSpawner`'s missing `ClearAll()` found and fixed (real bug: leaked
+   static state between tests) — see Phase 7 below. Its other claimed fix
+   (`sell_distinct`) was reverted in the Phase 8 pre-check above.
 
 **Still flagged, not resolved by anything in Phase 7 — carried forward
 unchanged:**
@@ -53,6 +130,11 @@ unchanged:**
    can't run headless, still need human eyes.
 5. Out of scope, unchanged: monetization/IAP, final art, store compliance,
    audio, cutscene polish beyond dialogue, multiplayer, localization.
+6. **New, from the Phase 8 pre-check above:** two open design questions —
+   whether `q_trade_routes` is meant to require an early second-region unlock,
+   and whether `unlock_region` steps should retroactively complete against an
+   already-unlocked region. Both awaiting a decision before any further work
+   on the main chain past q_pebbles_past (#23).
 
 ---
 
