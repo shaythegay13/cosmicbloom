@@ -15,6 +15,8 @@ import { fileURLToPath } from 'url';
 import { SCALE, TILE, shade } from './style.mjs';
 import { cropSprite } from './sprites/crops.mjs';
 import { characterSprite } from './sprites/characters.mjs';
+import { animalSprite } from './sprites/animals.mjs';
+import { groundTileMask } from './sprites/tiles.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(HERE, '../..');                       // D:\Unity\Cosmic Bloom
@@ -22,6 +24,31 @@ const GAMEDATA_DIR = join(PROJECT_ROOT, 'Assets/Resources/GameData');
 const OUT_ROOT = join(PROJECT_ROOT, 'Assets/Resources/Sprites/Generated');
 const CROPS_OUT = join(OUT_ROOT, 'Crops');
 const NPCS_OUT = join(OUT_ROOT, 'Npcs');
+const ANIMALS_OUT = join(OUT_ROOT, 'Animals');
+const TILES_OUT = join(OUT_ROOT, 'Tiles');
+
+// animals.json has no body-plan field, so (same pattern as
+// AnimalSpawner.ExclusiveRegionByAnimal) this is a code-side table mapping
+// each animal to a shared body archetype (bird/quad/blob/swarm/amphibian)
+// plus one small marking that keeps same-archetype animals (3 birds, 6
+// quads) visually distinct — chicken vs duck vs owl in particular.
+const ANIMAL_VISUALS = {
+    chicken: { body: 'bird', marking: 'comb' },
+    comet_duck: { body: 'bird', marking: 'bill' },
+    star_owl: { body: 'bird', marking: 'owl' },
+    sheep: { body: 'quad', size: 'big', marking: 'wool' },
+    nebula_cow: { body: 'quad', size: 'big', marking: 'spots' },
+    crater_goat: { body: 'quad', size: 'big', marking: 'horns' },
+    asteroid_pig: { body: 'quad', size: 'big', marking: 'snout' },
+    moon_rabbit: { body: 'quad', size: 'small', marking: 'ears' },
+    biolume_fox: { body: 'quad', size: 'small', marking: 'tail' },
+    cosmic_tortoise: { body: 'quad', size: 'small', marking: 'shell' },
+    glow_axolotl: { body: 'amphibian' },
+    star_slime: { body: 'blob' },
+    bee_swarm: { body: 'swarm', marking: 'stripes' },
+    butterfly_swarm: { body: 'swarm', marking: 'wings' },
+    firefly_swarm: { body: 'swarm', marking: 'glow' },
+};
 
 function readJson(path) {
     return JSON.parse(readFileSync(path, 'utf8'));
@@ -92,7 +119,37 @@ function buildNpcs() {
     console.log(`npcs: ${npcs.length} sprites written to ${NPCS_OUT}`);
 }
 
+function buildAnimals() {
+    mkdirSync(ANIMALS_OUT, { recursive: true });
+    const { animals } = readJson(join(GAMEDATA_DIR, 'animals.json'));
+    for (const animal of animals) {
+        const visual = ANIMAL_VISUALS[animal.id];
+        if (!visual) throw new Error(`no visual archetype mapped for animal '${animal.id}' — add one to ANIMAL_VISUALS in build-cosmic.mjs`);
+        const body = animal.palette && animal.palette.body ? animal.palette.body : '#cccccc';
+        const accent = animal.palette && animal.palette.accent ? animal.palette.accent : '#888888';
+        const px = animalSprite({ ...visual, color: body, accent });
+        writePng(px, join(ANIMALS_OUT, `${animal.id}.png`));
+    }
+    console.log(`animals: ${animals.length} sprites written to ${ANIMALS_OUT}`);
+}
+
+function buildTiles() {
+    mkdirSync(TILES_OUT, { recursive: true });
+    const { regions } = readJson(join(GAMEDATA_DIR, 'regions.json'));
+    let count = 0;
+    for (const region of regions) {
+        for (let tier = 0; tier < 3; tier++) {
+            const px = groundTileMask(tier, region.id);
+            writePng(px, join(TILES_OUT, `${region.id}_tier${tier}.png`));
+            count++;
+        }
+    }
+    console.log(`tiles: ${regions.length} regions x 3 tiers = ${count} frames written to ${TILES_OUT}`);
+}
+
 const t0 = Date.now();
 buildCrops();
 buildNpcs();
+buildAnimals();
+buildTiles();
 console.log(`done in ${Date.now() - t0}ms`);

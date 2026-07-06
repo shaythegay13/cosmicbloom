@@ -12,6 +12,8 @@ namespace CosmicBloom.World
     {
         const string CropsRoot = "Sprites/Generated/Crops/";
         const string NpcsRoot = "Sprites/Generated/Npcs/";
+        const string AnimalsRoot = "Sprites/Generated/Animals/";
+        const string TilesRoot = "Sprites/Generated/Tiles/";
 
         static readonly Dictionary<string, Sprite> _cache = new();
 
@@ -20,6 +22,13 @@ namespace CosmicBloom.World
 
         /// <summary>Generated body sprite for an NPC, or null if not generated.</summary>
         public static Sprite Npc(string npcId) => Load($"{NpcsRoot}{npcId}");
+
+        /// <summary>Generated body sprite for an animal, or null if not generated.</summary>
+        public static Sprite Animal(string animalId) => Load($"{AnimalsRoot}{animalId}");
+
+        /// <summary>Generated ground-tier texture mask for a region (grayscale — tinted by
+        /// Tile.color, not pre-colored), or null if not generated.</summary>
+        public static Sprite Tile(string regionId, int tier) => Load($"{TilesRoot}{regionId}_tier{tier}");
 
         static Sprite Load(string resourcePath)
         {

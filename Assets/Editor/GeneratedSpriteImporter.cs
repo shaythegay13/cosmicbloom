@@ -19,6 +19,7 @@ public class GeneratedSpriteImporter : AssetPostprocessor
 {
     const string GeneratedRoot = "Assets/Resources/Sprites/Generated/";
     const string NpcsRoot = "Assets/Resources/Sprites/Generated/Npcs/";
+    const string AnimalsRoot = "Assets/Resources/Sprites/Generated/Animals/";
     const float Ppu = 64f;
 
     void OnPreprocessTexture()
@@ -34,19 +35,20 @@ public class GeneratedSpriteImporter : AssetPostprocessor
         importer.mipmapEnabled = false;
         importer.spritePixelsPerUnit = Ppu;
 
-        // Crops: center pivot, same as the placeholder Square sprite they
-        // replace (FarmPlot centers the plot GameObject on the grid cell).
-        // NPCs: bottom-center pivot — the character art's feet sit right at
-        // the bottom edge of the 32px canvas (chibi standing pose), so a
-        // bottom pivot grounds them at NpcController's spawn point the same
-        // way the old near-bottom-pivoted Capsule (0.5, 0.15) did.
+        // Crops/Tiles: center pivot, same as the placeholder Square sprite
+        // they replace (FarmPlot/RegionWorldBuilder center on the grid cell).
+        // NPCs/Animals: bottom-center pivot — the character/critter art's
+        // feet sit right at the bottom edge of the 32px canvas, so a bottom
+        // pivot grounds them at the spawn point the same way the old
+        // near-bottom-pivoted Capsule (0.5, 0.15) / Critter (0.5, 0.1) did.
         bool isNpc = path.Contains(NpcsRoot);
-        var pivot = isNpc ? new Vector2(0.5f, 0.06f) : new Vector2(0.5f, 0.5f);
+        bool isAnimal = path.Contains(AnimalsRoot);
+        var pivot = isNpc ? new Vector2(0.5f, 0.06f) : isAnimal ? new Vector2(0.5f, 0.1f) : new Vector2(0.5f, 0.5f);
         importer.spritePivot = pivot;
 
         var settings = new TextureImporterSettings();
         importer.ReadTextureSettings(settings);
-        settings.spriteAlignment = (int)(isNpc ? SpriteAlignment.Custom : SpriteAlignment.Center);
+        settings.spriteAlignment = (int)((isNpc || isAnimal) ? SpriteAlignment.Custom : SpriteAlignment.Center);
         settings.spritePivot = pivot;
         importer.SetTextureSettings(settings);
     }

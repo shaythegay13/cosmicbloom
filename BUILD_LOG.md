@@ -2,6 +2,108 @@
 
 ---
 
+## P3-Phase 9 — Extend art pipeline to animals and tiles (2026-07-06 ~09:10)
+
+**Run deliberately ahead of Phase 8** (explicit instruction — Phase 8's crash
+investigation / economy fix / festival-rollover decisions follow immediately
+after this, not deferred further). Naming this `P3-Phase 9` rather than bare
+"Phase 9" on purpose: the original overnight build already has a "Phase 9 —
+Core UI" (`Logs/phase9_hud.png` etc., 2026-07-05) with its own `phase9_*`
+screenshot prefix. No filename actually collided (different basenames), but
+flagging it now so nobody reads "Phase 9" in this log and assumes Core UI —
+same spirit as the Phase 4/4b and Phase 5/5 disambiguation already in this file.
+
+**Reused, not rebuilt:** the old web game (`D:\FarmandGiveGame\tools\art\sprites\`)
+already had `creatures.mjs` (quad/bird body plans) and `tiles.mjs`
+(groundTile/soilTile/etc.) — Phase 5's own note flagged these as the deferred
+categories. Both got adapted into `Tools/art/sprites/animals.mjs` and
+`tiles.mjs` in this project, reusing the shared `Px`/`shade`/`mulberry32`
+primitives already copied into `Tools/art/style.mjs`.
+
+**Animals (15):** `animals.json` has no body-plan field, so — same pattern as
+`AnimalSpawner.ExclusiveRegionByAnimal` — `ANIMAL_VISUALS` in
+`build-cosmic.mjs` is a code-side table mapping each animal id to a shared
+body archetype (`bird`/`quad`/`blob`/`swarm`/`amphibian`) plus one small
+`marking` for differentiation within an archetype (3 birds, 6 quads). `blob`
+(star_slime) and `swarm` (bee/butterfly/firefly helpers) are new archetypes
+the old game never needed — no legless jelly or insect-cluster animal existed
+in Farm & Give's creature roster.
+- **Chicken specifically confirmed** (the phase's explicit ask, since the
+  placeholder read as an undifferentiated grey blob): red comb + wattle, and
+  the shared bird-beak color overridden to orange — the base `bird()` plan
+  colors the beak from the animal's own `accent` hex, which for the Star
+  Chicken's palette is pale blue, not beak-colored. `Phase9ArtTests.
+  AllAnimals_RenderGeneratedSprites_ChickenDistinctFromOtherBirds` asserts the
+  chicken's generated sprite is distinct from both other birds (comet_duck,
+  star_owl); visual confirmation in `Logs/phase9_animals.png`.
+- First pass on the three insect-helper swarms (bee/butterfly/firefly) had bee
+  and firefly reading nearly identically (both just small same-size colored
+  dot clusters) — fixed by giving bees a darkened stripe band + pale wing
+  dots, and fireflies a darkened silhouette + a fixed bright glow dot
+  (`#fff3b0`, not derived from the animal's own — inconsistent — palette
+  semantics) so "glow" reads regardless of each animal's specific hues.
+
+**Ground tiles:** generated as grayscale texture **masks**, not pre-colored
+PNGs — `RegionWorldBuilder` still sets `Tile.color` from `regions.json`'s
+`groundTiers` hex exactly as before, and Unity's tilemap tint multiplies the
+mask pixels against it. This was the key design choice: it means
+`RegionWorldTests`' existing direct `Tile.color` assertions needed zero
+changes, regions.json stays the single source of truth for per-region color,
+and the new texture (cracks/pebbles tier 0, sparse tufts tier 1, dense tufts
+tier 2) still varies per region via a per-region RNG seed even though all
+five regions share the same per-tier generation logic. Verified in
+`Logs/phase9_tiles.png`.
+
+**Crop maturity differentiation:** planted 4 Starlight-Vale-native crops
+(wheat/stalk, star_tomato/bush, carrot/root, clover_cover/flower — the 4
+archetypes with a vale-native representative; vine has none, already covered
+singly by Phase 5's `GeneratedArtTests`) at final growth stage side by side.
+`Phase9ArtTests.MatureCrops_DifferentiateAcrossArchetypes` asserts all four
+render distinct generated sprites; `Logs/phase9_crops_mature.png` confirms
+visually — Phase 5's per-stage art does differentiate at full maturity, not
+just between early sprout stages.
+
+**Wiring:** `GeneratedSprites.Animal()`/`.Tile()` loaders (same null-safe
+Resources.Load-and-cache pattern as `.Crop()`/`.Npc()`);
+`GeneratedSpriteImporter` gained an Animals case (bottom-center pivot 0.5,0.1
+— matches the old placeholder `Critter()`'s pivot exactly); `AnimalController.
+Spawn` follows `NpcController`'s exact real-art pattern (generated sprite +
+`Color.white`, tinted placeholder fallback) including the produce-ready glow
+multiplier now branching on which base color applies; `RegionWorldBuilder`
+pulls `GeneratedSprites.Tile(def.id, t)` with the flat `Square` as fallback.
+
+**Verification evidence:**
+- Compile: `Logs/phase9_compile.log` — 0 `error CS`.
+- New tests in isolation: `Logs/phase9_new_tests.xml` — **3/3 PASS**.
+- Full regression, filter lists rebuilt from the last known-good XMLs per the
+  reuse rule (`Logs/phase8_split_nographics.xml` for nographics,
+  `Logs/phase7_split_render.xml` for render, plus the 3 new Phase9ArtTests
+  render methods — all screenshot tests, none nographics-safe):
+  `Logs/phase9_split_nographics.xml` **57/57 PASS**,
+  `Logs/phase9_split_render.xml` **9/9 PASS**. Filter name lists saved
+  alongside (`phase9_split_*_names.txt`) for the next phase to reuse.
+
+**P3-Phase 9: COMPLETE ✅** — Phase 8 follows next, not deferred further.
+
+---
+
+## Open item logged, not built — landmarks/structures have no real art (2026-07-06 ~09:15)
+
+Flagged while doing the Phase 9 art-pipeline sweep, **not fixed or built
+here** — genuinely unscoped, needs a design decision on visual direction
+first, not just an art-generation pass like crops/NPCs/animals/tiles were.
+The arch and the 3 flat-colored structure blocks visible in Play mode
+(landmarks like `broken_greenhouse`/`moonlit_pond`/`celestial_arboretum` etc.
+from `regions.json`) have never been assigned real art in any phase across
+either build spec — they're still whatever placeholder shape/color they
+started as. Every other visual category (player, NPCs, crops, animals,
+ground tiles) now has real generated art; landmarks/structures are the one
+remaining gap. Needs a decision on visual direction (procedural like
+everything else, vs. hand-authored since there are only 7 unique landmarks
+total across 5 regions) before any building starts.
+
+---
+
 ## Phase 8 pre-check — Phase 7's `sell_distinct` fix reverted (2026-07-06 ~02:35)
 
 **Correction to the record below, per explicit instruction to verify before

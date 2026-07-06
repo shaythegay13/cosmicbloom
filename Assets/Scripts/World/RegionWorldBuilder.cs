@@ -69,7 +69,11 @@ namespace CosmicBloom.World
             for (int t = 0; t < 3; t++)
             {
                 tiles[t] = ScriptableObject.CreateInstance<Tile>();
-                tiles[t].sprite = ProceduralSprites.Square(32, 0);
+                // Real generated texture mask (Tools/art/build-cosmic.mjs output) if it
+                // loaded — a grayscale crack/tuft pattern tinted by Tile.color below, so
+                // regions.json's groundTiers hex stays the single source of truth for
+                // per-region color. Falls back to the flat placeholder square.
+                tiles[t].sprite = GeneratedSprites.Tile(def.id, t) ?? ProceduralSprites.Square(32, 0);
                 tiles[t].color = ProceduralSprites.ParseHex(
                     def.groundTiers != null && t < def.groundTiers.Count ? def.groundTiers[t] : null);
                 tiles[t].name = $"{def.id}_tier{t}";
