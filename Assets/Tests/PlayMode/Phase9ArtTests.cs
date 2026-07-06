@@ -214,5 +214,67 @@ namespace CosmicBloom.Tests
             Object.DestroyImmediate(regions.gameObject);
             GameEvents.Clear();
         }
+
+        [UnityTest]
+        public IEnumerator AllLandmarks_RenderGeneratedSprites_RuinedVersusRestoredDistinct()
+        {
+            GameEvents.Clear();
+            var regions = new GameObject("TestRegions").AddComponent<RegionManager>();
+            var grids = RegionWorldBuilder.BuildAll(regions);
+            var state = new GameState(new SaveSnapshot());
+            state.Save.coins = 20000;   // covers even heartseed_roots' 8000 restoreCost
+            var landmarks = LandmarkSpawner.SpawnAll(regions, state);
+            yield return null;
+
+            // Every landmark starts ruined — confirm its own generated ruined sprite.
+            var ruinedById = new Dictionary<string, Sprite>();
+            foreach (var lm in landmarks)
+            {
+                var expected = GeneratedSprites.Landmark(lm.Def.id, false);
+                Assert.IsNotNull(expected, $"generated ruined sprite exists for landmark {lm.Def.id}");
+                var sr = lm.GetComponent<SpriteRenderer>();
+                Assert.AreSame(expected, sr.sprite, $"{lm.Def.id} renders the real generated ruined sprite, not the flat placeholder");
+                Assert.AreEqual(Color.white, sr.color, $"{lm.Def.id} generated sprite is unlerped");
+                ruinedById[lm.Def.id] = sr.sprite;
+            }
+
+            // Restore every other landmark so the screenshot shows both states, and
+            // confirm each swaps to its own distinct restored sprite (not a re-tint).
+            var player = PlayerController.Spawn(Vector3.zero);
+            for (int i = 0; i < landmarks.Count; i += 2)
+            {
+                var lm = landmarks[i];
+                lm.Interact(player);
+                var sr = lm.GetComponent<SpriteRenderer>();
+                var expectedRestored = GeneratedSprites.Landmark(lm.Def.id, true);
+                Assert.IsNotNull(expectedRestored, $"generated restored sprite exists for landmark {lm.Def.id}");
+                Assert.AreSame(expectedRestored, sr.sprite, $"{lm.Def.id} swaps to its real generated restored sprite");
+                Assert.AreNotEqual(ruinedById[lm.Def.id], sr.sprite, $"{lm.Def.id} restored sprite differs from its ruined sprite");
+            }
+            Debug.Log($"[P9Test] {landmarks.Count} landmarks render generated art; alternating landmarks restored to confirm the ruined/restored swap");
+
+            var camGo = new GameObject("CaptureCam") { tag = "MainCamera" };
+            var cam = camGo.AddComponent<Camera>();
+            cam.orthographic = true;
+            cam.transform.position = new Vector3(90f, 10f, -10f);
+            cam.orthographicSize = 14f;
+            cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            yield return null;
+            yield return null;
+
+            Screenshot(cam, 2000, 280, "phase9_landmarks.png");
+
+            Object.DestroyImmediate(camGo);
+            Object.DestroyImmediate(player.gameObject);
+            foreach (var lm in landmarks) if (lm != null) Object.DestroyImmediate(lm.gameObject);
+            foreach (var def in GameDatabase.Regions)
+            {
+                var go = GameObject.Find(RegionWorldBuilder.ToPascal(def.id));
+                if (go != null) Object.DestroyImmediate(go);
+            }
+            Object.DestroyImmediate(regions.gameObject);
+            GameEvents.Clear();
+        }
     }
 }

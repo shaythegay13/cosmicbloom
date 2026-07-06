@@ -63,44 +63,65 @@ render distinct generated sprites; `Logs/phase9_crops_mature.png` confirms
 visually — Phase 5's per-stage art does differentiate at full maturity, not
 just between early sprout stages.
 
-**Wiring:** `GeneratedSprites.Animal()`/`.Tile()` loaders (same null-safe
-Resources.Load-and-cache pattern as `.Crop()`/`.Npc()`);
+**Landmarks/structures (7) — extended into this same phase rather than
+deferred.** Initially logged as an open item ("needs a design decision on
+visual direction first"), then reconsidered: it's the same data-driven
+pattern as crops/NPCs/animals/tiles applied to a fifth category whose data
+(`regions.json`'s `landmarks` list) already exists — not actually a separate
+design question. `Tools/art/sprites/landmarks.mjs` hand-authors one drawing
+function per landmark id (no shared body-plan the way animals do — 7
+one-off structures: `broken_greenhouse`, `moonlit_pond`,
+`celestial_arboretum`, `solar_forge`, `lunar_observatory`,
+`stargazers_rest`, `heartseed_roots`), each rendered in **two states**
+(ruined/restored) — the direct analog of crop *stages* (multiple generated
+frames per id, swapped as game state changes) rather than NPCs' single
+static portrait, matching `LandmarkController`'s existing binary
+`Restored` flag exactly. No separate "arch" object exists anywhere in
+`Assets/Scripts` — the phase-9-kickoff description of "the arch and the 3
+flat-colored structure blocks" was almost certainly informal shorthand for
+these same landmark placeholders, not a distinct unbuilt object.
+- `LandmarkController.RefreshVisual()` now picks `GeneratedSprites.
+  Landmark(Def.id, restored)` (white, untinted) over the flat `Square` +
+  color-swap fallback — same real-art/fallback shape every other category
+  uses. Stale doc-comment count fixed too (said "17", data has 7).
+- `Phase9ArtTests.AllLandmarks_RenderGeneratedSprites_RuinedVersusRestoredDistinct`
+  spawns all 7, confirms each renders its own generated ruined sprite, then
+  restores every other one and confirms the sprite swaps to a *different*
+  generated restored sprite (not a re-tint of the same texture).
+  `Logs/phase9_landmarks.png` shows all 5 regions with a mix of ruined/
+  restored landmarks visible.
+
+**Wiring:** `GeneratedSprites.Animal()`/`.Tile()`/`.Landmark()` loaders (same
+null-safe Resources.Load-and-cache pattern as `.Crop()`/`.Npc()`);
 `GeneratedSpriteImporter` gained an Animals case (bottom-center pivot 0.5,0.1
-— matches the old placeholder `Critter()`'s pivot exactly); `AnimalController.
-Spawn` follows `NpcController`'s exact real-art pattern (generated sprite +
-`Color.white`, tinted placeholder fallback) including the produce-ready glow
-multiplier now branching on which base color applies; `RegionWorldBuilder`
-pulls `GeneratedSprites.Tile(def.id, t)` with the flat `Square` as fallback.
+— matches the old placeholder `Critter()`'s pivot exactly; Landmarks needed
+no new case — its center pivot already matches the importer's default
+branch, same as the flat `Square` it replaces); `AnimalController.Spawn` and
+`LandmarkController.RefreshVisual` both follow `NpcController`'s exact
+real-art pattern (generated sprite + `Color.white`, tinted placeholder
+fallback — `AnimalController`'s produce-ready glow multiplier branches on
+which base color applies); `RegionWorldBuilder` pulls
+`GeneratedSprites.Tile(def.id, t)` with the flat `Square` as fallback.
 
 **Verification evidence:**
-- Compile: `Logs/phase9_compile.log` — 0 `error CS`.
-- New tests in isolation: `Logs/phase9_new_tests.xml` — **3/3 PASS**.
+- Compile: `Logs/phase9_compile.log` (animals/tiles), `Logs/phase9c_compile.log`
+  (+ landmarks) — both 0 `error CS`.
+- New tests in isolation: `Logs/phase9b_new_tests.xml` — **4/4 PASS** (all of
+  `Phase9ArtTests`, including the landmark test added after the first pass).
 - Full regression, filter lists rebuilt from the last known-good XMLs per the
   reuse rule (`Logs/phase8_split_nographics.xml` for nographics,
-  `Logs/phase7_split_render.xml` for render, plus the 3 new Phase9ArtTests
-  render methods — all screenshot tests, none nographics-safe):
-  `Logs/phase9_split_nographics.xml` **57/57 PASS**,
-  `Logs/phase9_split_render.xml` **9/9 PASS**. Filter name lists saved
-  alongside (`phase9_split_*_names.txt`) for the next phase to reuse.
+  `Logs/phase7_split_render.xml` for render, plus all 4 `Phase9ArtTests`
+  render methods — every one is a screenshot test, none nographics-safe):
+  `Logs/phase9b_split_nographics.xml` **57/57 PASS**,
+  `Logs/phase9b_split_render.xml` **10/10 PASS**. Filter name lists saved
+  alongside (`phase9_split_*_names.txt` / `phase9b_split_render_names.txt`)
+  for the next phase to reuse.
 
-**P3-Phase 9: COMPLETE ✅** — Phase 8 follows next, not deferred further.
-
----
-
-## Open item logged, not built — landmarks/structures have no real art (2026-07-06 ~09:15)
-
-Flagged while doing the Phase 9 art-pipeline sweep, **not fixed or built
-here** — genuinely unscoped, needs a design decision on visual direction
-first, not just an art-generation pass like crops/NPCs/animals/tiles were.
-The arch and the 3 flat-colored structure blocks visible in Play mode
-(landmarks like `broken_greenhouse`/`moonlit_pond`/`celestial_arboretum` etc.
-from `regions.json`) have never been assigned real art in any phase across
-either build spec — they're still whatever placeholder shape/color they
-started as. Every other visual category (player, NPCs, crops, animals,
-ground tiles) now has real generated art; landmarks/structures are the one
-remaining gap. Needs a decision on visual direction (procedural like
-everything else, vs. hand-authored since there are only 7 unique landmarks
-total across 5 regions) before any building starts.
+**P3-Phase 9: COMPLETE ✅** — all five visual categories (crops, NPCs,
+animals, ground tiles, landmarks) now have real generated art; only
+effects/props remain procedural placeholders (out of scope, not flagged as
+a gap — no `regions.json`-equivalent data list drives them). Phase 8 follows
+next, not deferred further.
 
 ---
 

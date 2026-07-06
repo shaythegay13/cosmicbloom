@@ -1,5 +1,5 @@
 // Cosmic Bloom — restorable landmarks from regions.json (broken greenhouse,
-// moonlit pond, …). One controller for all 17; identity comes from data.
+// moonlit pond, …). One controller for all 7; identity comes from data.
 // Tap when in range: pay restoreCost coins → restored (persisted in
 // FarmState.landmarksRestored) → GameEvents.LandmarkRestored feeds
 // restore_landmark quest steps.
@@ -37,7 +37,6 @@ namespace CosmicBloom.World
             go.transform.localScale = new Vector3(1.6f, 1.6f, 1f);
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = ProceduralSprites.Square(32, 2);
             sr.sortingOrder = 4;
             var mat = ProceduralSprites.LitMaterial;
             if (mat != null) sr.sharedMaterial = mat;
@@ -57,7 +56,18 @@ namespace CosmicBloom.World
         void RefreshVisual()
         {
             if (_sr == null) return;
-            _sr.color = Restored ? new Color(0.55f, 0.95f, 0.85f, 1f) : RuinedColor;
+            bool restored = Restored;
+
+            // Real generated art if it loaded (Tools/art/build-cosmic.mjs output) — a
+            // distinct ruined/restored sprite per landmark, so no tint. Falls back to
+            // the flat placeholder square + ruined/restored color swap when nothing
+            // was generated for this landmark id.
+            var generated = GeneratedSprites.Landmark(Def.id, restored);
+            bool usingGenerated = generated != null;
+            _sr.sprite = usingGenerated ? generated : ProceduralSprites.Square(32, 2);
+            _sr.color = usingGenerated
+                ? Color.white
+                : (restored ? new Color(0.55f, 0.95f, 0.85f, 1f) : RuinedColor);
         }
 
         public void Interact(PlayerController player)

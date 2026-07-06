@@ -17,6 +17,7 @@ import { cropSprite } from './sprites/crops.mjs';
 import { characterSprite } from './sprites/characters.mjs';
 import { animalSprite } from './sprites/animals.mjs';
 import { groundTileMask } from './sprites/tiles.mjs';
+import { landmarkSprite } from './sprites/landmarks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(HERE, '../..');                       // D:\Unity\Cosmic Bloom
@@ -26,6 +27,7 @@ const CROPS_OUT = join(OUT_ROOT, 'Crops');
 const NPCS_OUT = join(OUT_ROOT, 'Npcs');
 const ANIMALS_OUT = join(OUT_ROOT, 'Animals');
 const TILES_OUT = join(OUT_ROOT, 'Tiles');
+const LANDMARKS_OUT = join(OUT_ROOT, 'Landmarks');
 
 // animals.json has no body-plan field, so (same pattern as
 // AnimalSpawner.ExclusiveRegionByAnimal) this is a code-side table mapping
@@ -147,9 +149,29 @@ function buildTiles() {
     console.log(`tiles: ${regions.length} regions x 3 tiers = ${count} frames written to ${TILES_OUT}`);
 }
 
+function buildLandmarks() {
+    mkdirSync(LANDMARKS_OUT, { recursive: true });
+    const { regions } = readJson(join(GAMEDATA_DIR, 'regions.json'));
+    const seen = new Set();
+    let count = 0;
+    for (const region of regions) {
+        for (const lm of region.landmarks || []) {
+            if (seen.has(lm.id)) continue;   // ids are unique across regions.json today; guard anyway
+            seen.add(lm.id);
+            for (const restored of [false, true]) {
+                const px = landmarkSprite(lm.id, restored);
+                writePng(px, join(LANDMARKS_OUT, `${lm.id}_${restored ? 'restored' : 'ruined'}.png`));
+                count++;
+            }
+        }
+    }
+    console.log(`landmarks: ${seen.size} landmarks x 2 states = ${count} frames written to ${LANDMARKS_OUT}`);
+}
+
 const t0 = Date.now();
 buildCrops();
 buildNpcs();
 buildAnimals();
 buildTiles();
+buildLandmarks();
 console.log(`done in ${Date.now() - t0}ms`);

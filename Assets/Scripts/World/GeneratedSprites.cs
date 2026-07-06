@@ -14,6 +14,7 @@ namespace CosmicBloom.World
         const string NpcsRoot = "Sprites/Generated/Npcs/";
         const string AnimalsRoot = "Sprites/Generated/Animals/";
         const string TilesRoot = "Sprites/Generated/Tiles/";
+        const string LandmarksRoot = "Sprites/Generated/Landmarks/";
 
         static readonly Dictionary<string, Sprite> _cache = new();
 
@@ -29,6 +30,10 @@ namespace CosmicBloom.World
         /// <summary>Generated ground-tier texture mask for a region (grayscale — tinted by
         /// Tile.color, not pre-colored), or null if not generated.</summary>
         public static Sprite Tile(string regionId, int tier) => Load($"{TilesRoot}{regionId}_tier{tier}");
+
+        /// <summary>Generated sprite for a landmark in its ruined or restored state, or null if not generated.</summary>
+        public static Sprite Landmark(string landmarkId, bool restored) =>
+            Load($"{LandmarksRoot}{landmarkId}_{(restored ? "restored" : "ruined")}");
 
         static Sprite Load(string resourcePath)
         {
