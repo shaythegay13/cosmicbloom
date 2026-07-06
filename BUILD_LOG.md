@@ -2,6 +2,96 @@
 
 ---
 
+## Phase 4 — animal region distribution (2026-07-05 ~20:40)
+
+**Research (before deciding anything):** `animals.json` has no region/home field.
+`regions.json` and `AnimalSpawner.cs` confirmed all 15 owned animals spawned into
+a single Vale paddock regardless of which animal (`AnimalSpawner.cs`'s own header
+comment already flagged this as a DECISION pending review). `COSMIC_BLOOM_GDD.md`
+gives only two explicit region ties (both to Starlight Vale's Moonlit Pond
+landmark, via `comet_duck` and `glow_axolotl`'s own `notes` fields) plus Act 3's
+four Sacred Gardens' one-line themes (Sun: heat/solar; Moon: glow-in-the-dark/
+nocturnal; Star: constellation/stargazing; Nebula: bioluminescent/floating
+islands) — no per-animal assignment. Palette hex-compared against each region's
+`groundTiers`: two **exact** hex matches turned up (`crater_goat`'s accent
+`#7d84b8` = Moon Garden's 3rd ground tier; `asteroid_pig`'s accent `#8a6a3e` =
+Sun Garden's 1st ground tier), which reads as an intentional but unlabeled
+authoring signal.
+
+**DECISION: code-side lookup table, not a new JSON field** — same pattern as
+`ExploreTargets`' position table (Phase 2). A `Dictionary<string,string>` in
+`AnimalSpawner.HomeRegionByAnimal` assigns each of the 15 animals from, in
+priority order: (1) explicit landmark notes, (2) exact palette hex match to a
+region's `groundTiers`, (3) name/behavior theming against the Sacred Gardens'
+one-line themes, falling back to `starlight_vale` when nothing pulls elsewhere.
+Result: 9 stay in Starlight Vale (`chicken`, `sheep` — GDD's own "farm classics"
+pairing, both below any Act-3 region's `unlockLevel`; `comet_duck`, `glow_axolotl`
+— explicit Moonlit Pond notes; `biolume_fox` — free Act-1 tutorial companion;
+`cosmic_tortoise` — body `#6fae62` near-matches Vale's `#5fae62` lush tier;
+`bee_swarm`/`butterfly_swarm`/`firefly_swarm` — pollinator/helper roster with no
+region-specific theming, kept on the main farm); `asteroid_pig` → Sun Garden;
+`crater_goat`, `moon_rabbit` → Moon Garden (goat by exact hex, rabbit by its
+nocturnal notes matching Moon Garden's nocturnal-farming theme); `star_owl` →
+Star Garden (constellation/stargazing); `nebula_cow`, `star_slime` → Nebula
+Garden (cow by name + magenta palette family; slime shares the cow's exact
+accent hex `#e05ad8`).
+
+**Known limitation, flagged not fixed:** `AnimalSpawner.TryBuy` only gates on
+`unlockLevel`/coins, not on the assigned region being unlocked (unchanged from
+before this phase). Four Act-3 animals can be bought before their home region is
+reachable (biggest gap: `nebula_cow` unlocks at level 9, Nebula Garden at level
+20) — cosmetically fine since `RegionWorldBuilder.BuildAll` always builds and
+registers all 5 regions' bounds regardless of unlock state, so the animal just
+waits there for the player to arrive. Not fixed because purchase-gating on
+region-unlock wasn't asked for and would change existing `TryBuy` behavior.
+
+`AnimalSpawner.SpawnOne` now paddocks animals per-region (own index counter per
+`regionId`) instead of one global index, so animals in different regions don't
+stack at the same offset.
+
+**Verification evidence:**
+- Compile: `Logs/phase4_compile.log` — 0 `error CS` lines (pre-dates the new
+  test file but validates `AnimalSpawner.cs`'s own edit; the full-suite runs
+  below recompiled everything together with 0 errors either way).
+- New test (`Assets/Tests/PlayMode/AnimalRegionTests.cs`,
+  `NonValeAnimals_SpawnInAssignedRegionBounds`): buys `crater_goat`,
+  `asteroid_pig`, `star_owl`, `nebula_cow`, `chicken` at level 20 and reads back
+  **actual `AnimalController.transform.position`** against each region's real
+  `RegionManager` bounds (built by `RegionWorldBuilder.BuildAll`, not asserted
+  bounds) — `Logs/test_results_p4animals.xml`, **1/1 PASS**. Confirms
+  `crater_goat`→moon_garden, `asteroid_pig`→sun_garden, `star_owl`→star_garden,
+  `nebula_cow`→nebula_garden, and `chicken` still in starlight_vale, all by
+  reading the spawned GameObjects' real world position, not the spawner's
+  intended behavior.
+- Full-suite regression (same nographics/render split as Phase 2/3, with the
+  new test added to the nographics filter list): **54/54 PASS**
+  (`Logs/p4_split_nographics_v3.xml`) + **5/5 PASS** (`Logs/p4_split_render.xml`)
+  — **59/59 total, 0 failures.**
+
+**Three batchmode pitfalls hit and fixed along the way** (added to the
+`headless-unity-verify-pipeline` memory so they aren't repeated):
+1. First test run combined `-quit` with `-runTests` — Unity compiled, then quit
+   immediately without ever entering the test runner (exit code 0, no error
+   logged; silent no-op). Fixed by dropping `-quit` — `-runTests` manages its own
+   exit.
+2. First full-suite attempt joined the 54-test `-testFilter` list with commas —
+   Unity's separator is **`;`** — which silently matched **zero** tests
+   (`Logs/p4_split_nographics.xml`, exit 0, "No tests were executed"). Fixed by
+   rejoining with semicolons (`Logs/p4_split_nographics_v2.xml` then correctly
+   ran 54 tests, surfacing pitfall 3 below).
+3. `AnimalSpawner._spawned` is a static list; my new test's teardown destroyed
+   the spawned GameObjects but never cleared the list itself, so 5 stale entries
+   leaked into `ToolAnimalTests.Animals_SpawnBuyProduceCollect`'s
+   `AnimalSpawner.Spawned.Count` assertion (expected 1, got 6 — one real failure
+   in `p4_split_nographics_v2.xml`, not a false pass). Fixed by having the new
+   test's teardown call `AnimalSpawner.SpawnOwned` with an empty-animals state,
+   which both destroys and clears the static list — same reset path production
+   code already uses when a save reloads.
+
+**Phase 4: COMPLETE.**
+
+---
+
 ## Phase-2 Spec / Phase 3 — collapsed phase: q_comet_chaser + q_festival_circuit (2026-07-05 ~17:45)
 
 Both builds follow the user-approved rulings verbatim (QUEST_GAP_REPORT.md /

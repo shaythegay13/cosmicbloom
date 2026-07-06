@@ -35,6 +35,18 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Region unlock: coins + level per `regions.json`, NOT a direct restoration threshold. Restoration feeds the economy through quest rewards, not a direct gate.
 - Tool tiers: till t3=3×1, water t2=+4 neighbors/t3=3×3, harvest t1=1×2/t2=3×3.
 - `GameConfig.CharityEnabled` stays `false`. Don't touch it.
+- Animal region distribution (Phase 4, 2026-07-05): `animals.json` has no
+  home-region field — `AnimalSpawner.HomeRegionByAnimal` is a code-side lookup
+  table (same pattern as `ExploreTargets`), assigned from explicit landmark
+  notes, exact palette hex matches to a region's `groundTiers`, then name/
+  behavior theming, falling back to `starlight_vale`. 9 of 15 animals stay in
+  the Vale (starter livestock, pollinator/helper roster, explicit Moonlit Pond
+  ties); the rest split across the four Sacred Gardens. See BUILD_LOG.md Phase
+  4 for the full per-animal rationale. Known gap, not fixed: buying an animal
+  only checks `unlockLevel`/coins, not whether its home region is unlocked yet
+  (worst case `nebula_cow` at level 9 vs. Nebula Garden's level-20 unlock) —
+  harmless since all 5 regions are always built/registered, the animal just
+  waits there.
 
 ### Quest stub rulings (user-approved 2026-07-05 — see QUEST_GAP_REPORT.md)
 - BUILD (Phase 2): fishing (ToolService action at restored moonlit_pond), world
