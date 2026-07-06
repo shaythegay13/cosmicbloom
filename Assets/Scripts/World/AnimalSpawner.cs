@@ -34,6 +34,17 @@ namespace CosmicBloom.World
 
         public static IReadOnlyList<AnimalController> Spawned => _spawned;
 
+        /// <summary>Test/domain-reload hygiene (mirrors PickupSpawner/ExploreMarkerSpawner's
+        /// ClearAll) — without this, a test that buys animals and only destroys its own
+        /// GameObjects still leaves dangling entries in the static _spawned list, which
+        /// throws off any later test asserting an exact Spawned.Count.</summary>
+        public static void ClearAll()
+        {
+            foreach (var a in _spawned) if (a != null) Object.Destroy(a.gameObject);
+            _spawned.Clear();
+            _countByRegion.Clear();
+        }
+
         public static void SpawnOwned(GameState state, RegionManager regions)
         {
             foreach (var old in _spawned.Where(a => a != null)) Object.Destroy(old.gameObject);

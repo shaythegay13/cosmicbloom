@@ -2,6 +2,146 @@
 
 ---
 
+## FINAL STATUS — Phase-2 Spec complete, Phases 0–7 (2026-07-06 ~02:20)
+
+**Definition of done met, for real this time.** The extended-chain requirement
+(Phase 7, below) replaces the old milestone — completing q_arrival/q_first_sprout
+then jumping to Sun Garden via a direct `RegionUnlockService` call — with the
+actual 47-quest main chain walked start to finish through q_gates_of_sun's own
+`unlock_region` step (#30) and two steps into Act 3 (#31–32), every step driven
+by its real trigger. See Phase 7 below for the full evidence.
+
+**Complete:**
+1. Phase 0 — mobile build & runtime smoke test: real Android IL2CPP APK built and
+   run; `GameDatabase.LoadAll()` confirmed working under IL2CPP (the spec's #1
+   named risk did not materialize).
+2. Phase 1 — quest-gap investigation (`QUEST_GAP_REPORT.md`), user-approved
+   2026-07-05.
+3. Phase 2 — 7 of 9 stubbed quest systems built for real (fishing, wait/timer,
+   delivery, generic collection, exploration, plus the two side-quest-inventory
+   fixes: tool auto-buy, eternal-bloom threshold poll).
+4. Phase 3 — the remaining 2 (crafting, festival-hosting) simplified per
+   user-approved rulings; the two "unclear" step types resolved as reuses of
+   existing infra (witness_event, host_festival).
+5. Phase 4b — animal shared-pool/exclusive region distribution (replaces the
+   original one-paddock model).
+6. Phase 5 — Farm&Give art pipeline reused for real crop + NPC sprites.
+7. Phase 6 — UI polish (dialogue/HUD overlap, quest-log truncation).
+8. Phase 7 — full regression (64/64) + the extended-chain playthrough above,
+   plus 2 bugs found and fixed while building it (`sell_distinct`'s uncompletable
+   threshold; `AnimalSpawner`'s missing `ClearAll()`) — see below for both.
+
+**Still flagged, not resolved by anything in Phase 7 — carried forward
+unchanged:**
+1. **Crash signature (2)** — a hang after crash during Editor shutdown inside
+   `WorkerManagerASIO`/`TcpMessagingServerClientSession` teardown (process stays
+   alive post-crash-trace, needs a force-kill; confirmed hung, not slow).
+2. **Crash signature (3)** — a crash inside
+   `DelayedCallManager::Update → Coroutine::ContinueCoroutine → mono_runtime_invoke`,
+   reproduced twice, survived an `mcp.json` relay-disable attempt.
+   Both are genuinely undiagnosed (RAM-related, platform-related, or something
+   else entirely) and **distinct from the render-surface crash** that the
+   nographics/render split already fixed — that fix does not touch these two.
+   Neither recurred during Phase 7's batchmode runs (which never exercise Editor
+   shutdown or the MCP relay), so Phase 7 has no new evidence either way. If
+   either resurfaces, treat it as a fresh investigation, not an instance of the
+   render-surface issue.
+3. `q_challenge_sprout` and `q_galactic_traders` remain intentionally stubbed
+   (`challenge_run`/`trade_visitors` — the only `PendingSystemSteps` left, both
+   Act-4 optional side quests, user-approved LEAVE STUBBED ruling).
+4. Device-simulator pass (notch/safe-area) and in-editor feel checks — GUI-only,
+   can't run headless, still need human eyes.
+5. Out of scope, unchanged: monetization/IAP, final art, store compliance,
+   audio, cutscene polish beyond dialogue, multiplayer, localization.
+
+---
+
+## Phase 7 — Full regression + extended definition of done (2026-07-06 ~02:15)
+
+**Full regression (reused, not rebuilt — same nographics/render split
+methodology as every prior phase):** pulled the 56 nographics + 6 render
+fullnames straight from `Logs/phase6_split_*.xml`, added the 2 new Phase 7
+tests to the nographics list (58 total), reran both halves.
+- nographics half (58 tests): `Logs/phase7_split_nographics_v2.xml` — **58/58 PASS**.
+  (First attempt, `Logs/phase7_split_nographics.xml`, failed 1/58 — the
+  `AnimalSpawner` finding below; fixed and rerun.)
+- render half (6 tests, list unchanged from Phase 6): `Logs/phase7_split_render.xml`
+  — **6/6 PASS**.
+- **Total 64/64, 0 failures.**
+
+**Extended `FullPlaythroughTests` — the real ask for this phase.** Added
+`MainChain_ArrivalThroughSunGarden_AllRealQuestSteps` alongside (not replacing)
+the original `ValeToSunGarden_CoreLoop`. Where the original test proved the
+core loop works by completing only q_arrival/q_first_sprout for real and then
+calling `RegionUnlockService.TryUnlock` directly as a shortcut to reach Sun
+Garden, this one walks the entire real 47-quest main chain — q_arrival through
+q_gates_of_sun's own `unlock_region` step (quest #30), then two steps into
+Act 3 (q_solar_welcome, q_ember_harvest, #31–32) — using nothing but real
+triggers: farming (till/plant/water/harvest), real restore-cost
+`LandmarkController.Interact` (not the pre-marked-restored test shortcut used
+elsewhere), fishing, animal purchase + produce collection, harvest-at-night,
+world-pickup collection, explore-proximity, the simulated meteor-shower
+`wait_for`, seed-vault deposit, item delivery, the star-honey→lantern craft
+simplification, and the quest's own `unlock_region` firing. Evidence
+(`Logs/phase7_extended_test2.log`):
+```
+[P7Test] Act 1 complete: coins=630 level=8 vale restoration=94.5
+[P7Test] main chain complete through quest #30 (q_gates_of_sun) — 31 quests completed, coins=3268, level=11
+[P7Test] DONE — real quest chain walked through #32 (q_ember_harvest, Act 3).
+Completed=[q_arrival,q_first_sprout,q_soil_secrets,q_green_thumb,q_market_day,
+q_moonlit_pond,q_first_catch,q_coop_raising,q_egg_basket,q_night_shift,
+q_first_friend,q_pollinator_pals,q_broken_glass,q_vale_blooms,q_whispers,
+q_journals,q_lost_seed,q_crystal_depths,q_meteor_mystery,q_crash_garden,
+q_arboretum,q_seed_vault,q_pebbles_past,q_legacy_begins,q_trade_routes,
+q_star_charts,q_festival,q_lantern_light,q_midnight_visitor,q_valewide_bloom,
+q_gates_of_sun,q_solar_welcome,q_ember_harvest]
+```
+(`q_legacy_begins` is a bonus side quest auto-activated by talking to
+`elder_nova` for the `q_pebbles_past` delivery — harmless, not part of the
+main chain.)
+
+**Bug found and fixed while writing the extended test:** `q_trade_routes`
+("sell 10 crops of at least 3 kinds", data: `{kinds:3, count:10}`) was
+**uncompletable as shipped**. `QuestEngine.BumpDistinct` tracked one distinct-item
+`HashSet` and required its size to reach `step.count` — correct for `talk_to`
+(where the required set size *is* the NPC list length) but wrong for
+`sell_distinct`, where `step.count` is a total-sales figure and `step.kinds` is
+a separate variety floor. That made the check require 10 DISTINCT crop kinds,
+and no region has that many (starlight_vale, the richest, has 6) — the quest
+could never complete regardless of chain progress. Judged a mechanical
+evaluator bug rather than a content decision (the fix aligns the code with its
+own already-written quest description and mirrors `deposit_seeds`' existing
+kinds+count split — same category as the earlier user-approved
+`q_eternal_bloom` threshold-poll fix), so fixed in place: `QuestEngine.cs` now
+has a dedicated `BumpSellDistinct`/`SellTally` path tracking total sales and
+kind variety separately. Covered by a focused new unit test,
+`QuestEngineTests.SellDistinct_TotalCountAcrossMinimumKinds_CompletesQTradeRoutes`
+(6 sales/1 kind → not complete; 8 sales/3 kinds → not complete; 10 sales/3
+kinds → complete), and exercised for real by the extended playthrough above.
+
+**Second bug found while running the new test at scale, same category:**
+`AnimalSpawner` had no `ClearAll()` (unlike its sibling `PickupSpawner`/
+`ExploreMarkerSpawner`), so a test that buys animals and destroys only its own
+GameObjects still leaves dangling entries in the static `_spawned` list. The
+first nographics run (`Logs/phase7_split_nographics.xml`) caught this for
+real: the new extended playthrough (alphabetically before `ToolAnimalTests`)
+left 10 stale entries behind, and
+`ToolAnimalTests.Animals_SpawnBuyProduceCollect`'s
+`Assert.AreEqual(1, AnimalSpawner.Spawned.Count)` failed with 11 instead.
+Added `AnimalSpawner.ClearAll()` (mirrors the existing sibling spawners'
+pattern exactly) and called it from the new test's teardown; rerun
+(`Logs/phase7_split_nographics_v2.xml`) is clean.
+
+**Verification evidence:**
+- Compile: `Logs/phase7_compile2.log` — 0 `error CS`.
+- Isolated new-test run before the full regression: `Logs/phase7_extended_test2.xml`
+  — both new tests **2/2 PASS**.
+- Full regression as above: **64/64, 0 failures**.
+
+**Phase 7: COMPLETE.**
+
+---
+
 ## Phase 6 — UI polish pass (2026-07-06 ~01:30)
 
 **Fixed:**

@@ -129,6 +129,70 @@ namespace CosmicBloom.Tests
             Assert.AreEqual(2, restored.schema, "schema stays 2");
         }
 
+        void GrowToHarvestable(int x, int y, string cropId)
+        {
+            var def = GameDatabase.Crop(cropId);
+            var plot = _farming.PlotAt(x, y);
+            _farming.Water(x, y);
+            for (int guard = 0; plot.crop != null && plot.crop.stage < def.stages - 1 && guard < 12; guard++)
+            {
+                plot.crop.stageStart = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - def.GrowMsPerStage - 1;
+                _farming.FastForward();
+                if (plot.crop != null && plot.crop.needsWater) _farming.Water(x, y);
+            }
+        }
+
+        // Phase 7 finding: BumpDistinct's shared distinct-set counter required
+        // step.count DISTINCT kinds for sell_distinct, not step.count total sales
+        // across step.kinds varieties — q_trade_routes' count:10 exceeds every
+        // region's crop variety (max 6 in starlight_vale), making it uncompletable
+        // as written. Fixed with a dedicated total+kinds tally (BumpSellDistinct),
+        // mirroring deposit_seeds' own kinds+count split.
+        [Test]
+        public void SellDistinct_TotalCountAcrossMinimumKinds_CompletesQTradeRoutes()
+        {
+            _engine.StartQuest("q_trade_routes");   // sell_distinct kinds:3 count:10
+            UI.DialogueUI.Close();
+
+            _state.Save.seeds["starlight_berry"] = 20;
+            for (int i = 0; i < 6; i++)
+            {
+                if (_farming.PlotAt(20, 20) == null) _farming.Till(20, 20);
+                Assert.IsTrue(_farming.Plant(20, 20, "starlight_berry"));
+                GrowToHarvestable(20, 20, "starlight_berry");
+                Assert.IsTrue(_farming.Harvest(20, 20));
+            }
+            Assert.AreEqual(6, _engine.StepProgress("q_trade_routes"), "6 total sales tracked");
+            Assert.IsFalse(_engine.IsCompleted("q_trade_routes"), "one kind only: count ok, kinds not");
+
+            _state.Save.seeds["potato"] = 1;
+            _farming.Till(21, 20);
+            Assert.IsTrue(_farming.Plant(21, 20, "potato"));
+            GrowToHarvestable(21, 20, "potato");
+            Assert.IsTrue(_farming.Harvest(21, 20));
+
+            _state.Save.seeds["clover_cover"] = 1;
+            _farming.Till(22, 20);
+            Assert.IsTrue(_farming.Plant(22, 20, "clover_cover"));
+            GrowToHarvestable(22, 20, "clover_cover");
+            Assert.IsTrue(_farming.Harvest(22, 20));
+
+            Assert.AreEqual(8, _engine.StepProgress("q_trade_routes"), "8 total across 3 kinds");
+            Assert.IsFalse(_engine.IsCompleted("q_trade_routes"), "8 of 10 total is not enough yet");
+
+            for (int i = 0; i < 2; i++)
+            {
+                _state.Save.seeds["starlight_berry"] = 1;
+                if (_farming.PlotAt(23 + i, 20) == null) _farming.Till(23 + i, 20);
+                Assert.IsTrue(_farming.Plant(23 + i, 20, "starlight_berry"));
+                GrowToHarvestable(23 + i, 20, "starlight_berry");
+                Assert.IsTrue(_farming.Harvest(23 + i, 20));
+            }
+
+            Assert.IsTrue(_engine.IsCompleted("q_trade_routes"), "10 sales across 3 kinds completes q_trade_routes");
+            Debug.Log("[P7Test] q_trade_routes completed via 10 sales across 3 distinct crop kinds");
+        }
+
         [UnityTest]
         public IEnumerator SideQuest_ActivatesOnGiverChat()
         {
