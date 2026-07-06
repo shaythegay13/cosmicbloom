@@ -83,6 +83,19 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
   total-quests-completed-to-date instead of counting incrementally from quest
   activation. No design input needed, mechanical fix only.
 
+### UI polish (Phase 6, 2026-07-06)
+- Dialogue box no longer overlaps the HUD's bottom button bar (flagged since
+  Phase 9, fixed Phase 6) — `DialogueUI`'s panel anchors now sit above
+  `HudUI`'s bottom bar's top edge (0.075) with a margin, instead of overlapping it.
+- Pattern for any UI panel that renders variable-length real data (not a
+  fixed placeholder count): use `Text.resizeTextForBestFit`, not a fixed font
+  size — Unity's default `verticalOverflow` is `Truncate`, which silently
+  drops content past the box instead of showing an overlap, so a fixed size
+  can hide real quest/data content without any visible sign of it.
+  `QuestLogUI`'s body established this in Phase 6; reuse it rather than
+  re-deriving for `RanchUI`/`RegionMapUI` if their row-per-item lists ever
+  stop being fixed-count (5 regions, 15 animals today).
+
 ## Out of scope — don't build unless explicitly asked
 Monetization/IAP, final commissioned art, store compliance, audio, cutscene polish beyond dialogue, multiplayer, localization.
 

@@ -62,6 +62,13 @@ namespace CosmicBloom.UI
             brt.anchorMin = new Vector2(0.04f, 0.14f);
             brt.anchorMax = new Vector2(0.96f, 0.89f);
             brt.offsetMin = brt.offsetMax = Vector2.zero;
+            // Real quest data (Phase 2/3) means several active quests with full
+            // summaries/steps can exceed a fixed 24pt box; Text's default Truncate
+            // silently drops the overflow instead of showing it. Best Fit shrinks
+            // instead of hiding content, whatever the current active-quest count is.
+            _body.resizeTextForBestFit = true;
+            _body.resizeTextMinSize = 12;
+            _body.resizeTextMaxSize = 24;
 
             _skipButton = UIRoot.MakeButton(_panel.transform, "SkipPending", "", () =>
             {

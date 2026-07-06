@@ -47,8 +47,10 @@ namespace CosmicBloom.UI
             _panel = new GameObject("DialoguePanel", typeof(RectTransform), typeof(Image), typeof(Button));
             _panel.transform.SetParent(canvas.transform, false);
             var rt = (RectTransform)_panel.transform;
-            rt.anchorMin = new Vector2(0.03f, 0.02f);
-            rt.anchorMax = new Vector2(0.97f, 0.30f);
+            // Bottom-anchored above the HUD's bottom bar (HudUI: anchorMax.y 0.075),
+            // not overlapping it (Phase 9 morning-polish note; fixed Phase 6).
+            rt.anchorMin = new Vector2(0.03f, 0.095f);
+            rt.anchorMax = new Vector2(0.97f, 0.375f);
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             _panel.GetComponent<Image>().color = new Color(0.07f, 0.05f, 0.16f, 0.92f);
             _panel.GetComponent<Button>().onClick.AddListener(Close);

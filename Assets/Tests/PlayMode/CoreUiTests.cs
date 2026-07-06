@@ -123,23 +123,33 @@ namespace CosmicBloom.Tests
             canvas.worldCamera = cam;
             canvas.planeDistance = 1f;
 
-            yield return Capture(cam, "phase9_hud");
+            // Phase 6: stress the quest log with several real active quests
+            // (Phase 2/3 content) instead of just the starting q_arrival, so the
+            // screenshot reflects realistic mid-game content, not a fresh save.
+            _engine.StartQuest("q_first_sprout");
+            _engine.StartQuest("q_soil_secrets");
+            _engine.StartQuest("q_green_thumb");
+            _engine.StartQuest("q_market_day");
+            _engine.StartQuest("q_moonlit_pond");
+            DialogueUI.Close();   // none of these are cutscene-first, but be safe
+
+            yield return Capture(cam, "phase6_hud");
 
             _hud.QuestLog.Toggle(); yield return null;
-            yield return Capture(cam, "phase9_questlog");
+            yield return Capture(cam, "phase6_questlog");
             _hud.QuestLog.Toggle();
 
             _hud.Map.Toggle(); yield return null;
-            yield return Capture(cam, "phase9_map");
+            yield return Capture(cam, "phase6_map");
             _hud.Map.Toggle();
 
             DialogueUI.Show("Zyx", GameDatabase.Npc("zyx").dialogue["intro"]);
             yield return null;
-            yield return Capture(cam, "phase9_dialogue");
+            yield return Capture(cam, "phase6_dialogue");
             DialogueUI.Close();
 
             _hud.Pause.Toggle(); yield return null;
-            yield return Capture(cam, "phase9_pause");
+            yield return Capture(cam, "phase6_pause");
             _hud.Pause.Toggle();
 
             Object.DestroyImmediate(camGo);

@@ -2,6 +2,66 @@
 
 ---
 
+## Phase 6 — UI polish pass (2026-07-06 ~01:30)
+
+**Fixed:**
+- `UI/DialogueUI.cs` — the dialogue panel overlapped `HudUI`'s bottom button
+  bar (flagged as a cosmetic issue since Phase 9, item 7 in the morning
+  review queue). `HudUI`'s bottom bar spans canvas Y 0–0.075; the dialogue
+  panel's old anchors (0.02–0.30) dipped 0.055 into it. New anchors
+  (0.095–0.375) sit fully above the bar with a 0.02 margin, same overall
+  panel height.
+- `UI/QuestLogUI.cs` — the body `Text` used a fixed 24pt size with no
+  scrolling. With real Phase 2/3 quest content (multiple simultaneously
+  active quests, each with a title/summary/step line), Unity's default
+  `verticalOverflow` (`Truncate`) would silently drop quests past the box
+  instead of showing any visible overlap — a data-loss bug, not a
+  layout-collision one, and easy to miss because nothing looks broken until
+  you have enough active quests. Fixed with `resizeTextForBestFit`
+  (min 12 / max 24) so the box always shows everything, shrinking instead of
+  hiding. Verified with 6 simultaneously active quests (`q_arrival` +
+  `q_first_sprout`, `q_soil_secrets`, `q_green_thumb`, `q_market_day`,
+  `q_moonlit_pond`) — all visible, none clipped (`Logs/phase6_questlog.png`).
+
+**Swept, no fix needed:**
+- `RegionMapUI` (5 rows, one per `regions.json` entry) and `RanchUI` (15 rows,
+  one per `animals.json` entry) both use fixed per-row anchor math sized to
+  their data files' current counts — checked both counts against the live
+  JSON (5 regions, 15 animals) and the row math still fits inside each
+  panel's own 0–1 local space with margin at both ends. Not affected by
+  Phase 4b (animal region *distribution* has no UI-visible per-row field,
+  only where an owned animal spawns in the world).
+  `PauseMenuUI`'s 3 fixed buttons are unaffected by anything added since
+  Phase 9 (no data-driven content).
+- Checked whether Phase 5's real generated sprite art (crops/NPCs, world-space
+  `SpriteRenderer`s) could clip through any of the 5 screen-space UI panels:
+  it can't, structurally — `UIRoot.Canvas` is `ScreenSpaceOverlay` at runtime
+  (`ScreenSpaceCamera` with `planeDistance 1f` only in the capture-test
+  camera path), so the UI canvas always draws in front of world content
+  regardless of a sprite's size or pivot. None of the 5 panels embed a
+  generated sprite/Image referencing crop or NPC art either (grepped — all
+  panel/button visuals are solid-color `Image`s + `Text`), so there's no
+  path for the Phase 5 art change to affect UI layout at all.
+
+**Verification evidence:**
+- Compile: `Logs/phase6_compile.log` — 0 `error CS`.
+- Screenshots (portrait 720×1280, same capture test as Phase 9/11, filenames
+  now `phase6_*` to distinguish): `phase6_hud.png`, `phase6_questlog.png`
+  (6 active quests, stress case above), `phase6_map.png`, `phase6_dialogue.png`
+  (bottom bar now clear), `phase6_pause.png` — visually confirmed, no overlap
+  on any of the 5.
+- Full regression, known-good split reused per the standing rule (pulled
+  fullnames straight from the most recent `Logs/phase5_split_*.xml` rather
+  than rebuilding the list):
+  - nographics half (56 tests, same list as Phase 5): `Logs/phase6_split_nographics.xml` — **56/56 PASS**.
+  - render half (6 tests, includes the modified `CoreUiTests.CaptureEachUiScreen_Portrait`):
+    `Logs/phase6_split_render.xml` — **6/6 PASS**.
+  - **Total 62/62, 0 failures.**
+
+**Phase 6: COMPLETE.**
+
+---
+
 ## Phase 5 — Farm&Give art pipeline reused for crop + NPC sprites (2026-07-06 ~01:10)
 
 **What was reused vs written new:**
@@ -1125,7 +1185,7 @@ sun-native crop. Final suite: **39/39 tests green**, one commit per phase
 4. DECISION: animal produce coin value `max(2, cost/40)`; animals home in the vale paddock.
 5. DECISION: tool-tier area interpretations (till 3×1, water adjacent/3×3, harvest 1×2/3×3).
 6. Spec divergence: region access = coins+level per data, not a direct restoration latch.
-7. Dialogue box overlaps bottom bar visually (modal, cosmetic).
+7. ~~Dialogue box overlaps bottom bar visually (modal, cosmetic).~~ Fixed Phase 6.
 8. Unity Hub was force-killed twice after auto-relaunching the Editor (it held
    the project lock); restart the Hub normally when convenient.
 9. Visual/device checks pending human eyes: device-simulator pass, in-editor feel
