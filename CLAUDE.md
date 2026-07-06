@@ -28,6 +28,7 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Unity Test Runner PlayMode tests (headless `-runTests`) for behavior — not manual keypresses, not live Play-mode narration.
 - Evidence means an actual file: test XML, a log, a screenshot. Never report something as working without citing the file that proves it.
 - The nographics/render test split has a fixed, known-good filter list; pull it from the most recent p*_split_*.xml, don't rebuild it from class names.
+- Before rebuilding any multi-step mechanism (test filters, build scripts, data lookups), check whether a working version already exists from a prior phase and reuse it verbatim instead of re-deriving it. Re-derivation is the pattern behind three separate 2026-07-06 incidents: stale-XML confusion, a rebuilt test filter that crashed Unity twice, and general re-verification overhead.
 - Commit to git after every completed unit of work.
 - Content/design decisions (anything that changes story, quests, or what the game actually is) — stop and report, don't decide unilaterally, even unattended. Technical/mechanical judgment calls are fine to make and log.
 

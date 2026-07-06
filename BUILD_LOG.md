@@ -829,7 +829,7 @@ night-only NPC hidden at noon / visible at night; day NPC inverse — asserted
 
 ---
 
-## Phase 5 — Generic quest engine (2026-07-05 ~01:40)
+## Phase 5 (original numbering) — Generic quest engine (2026-07-05 ~01:40)
 
 **Built:**
 - `Core/QuestEngine.cs` — ONE engine for all 60 quests; structure/triggers/rewards
