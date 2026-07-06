@@ -2,7 +2,96 @@
 
 ---
 
-## Phase 4 — animal region distribution (2026-07-05 ~20:40)
+## Phase 5 — animal shared-pool/exclusive model, replacing Phase 4 (2026-07-05 ~21:10)
+
+**Phase 4's one-home-region model is superseded, not layered on top** — see
+"SUPERSEDED" marker on the Phase 4 entry directly below. Per the new spec: most
+animals should be available in every region; a small number are region-exclusive.
+
+**Confirmed from data before assigning anything:** `regions.json`'s
+`unlockCoins`/`unlockLevel` per region — starlight_vale 0/1, sun_garden 1500/8,
+moon_garden 2500/12, star_garden 4000/16, **nebula_garden 6000/20**. Nebula
+Garden is last in progression by both metrics, so it's the one region that gets
+**two** exclusives instead of one (4×1 + 1×2 = 6, matching the spec's 6
+region-exclusive animals out of 15).
+
+**DECISION — the model:**
+- `AnimalSpawner.ExclusiveRegionByAnimal` replaces `HomeRegionByAnimal` entirely
+  (same file, same code-side-lookup pattern, different shape): a
+  `Dictionary<string,string>` maps only the 6 **exclusive** animals to their one
+  region. Any animal **not** in the dictionary is shared — spawnable in all 5.
+- Exclusives, reusing Phase 4's findings where the signal already existed:
+  - **Sun Garden** ← `asteroid_pig` (Phase 4's exact palette hex match, accent
+    `#8a6a3e` = Sun Garden's ground tier — unchanged).
+  - **Moon Garden** ← `crater_goat` (Phase 4's exact palette hex match, accent
+    `#7d84b8` = Moon Garden's ground tier — unchanged).
+  - **Starlight Vale** ← `glow_axolotl` (its notes — "Lives in the restored
+    Moonlit Pond" — read as more definitive residency than `comet_duck`'s
+    "Happiest paddling" preference wording, so it gets the Vale's one exclusive
+    slot; `comet_duck` moves to the shared pool).
+  - **Star Garden** ← `star_owl` (Phase 4's name/theming call — constellation/
+    stargazing — unchanged; no palette match existed for this region either
+    phase).
+  - **Nebula Garden** ← `nebula_cow` **and** `star_slime` (Phase 4's pairing —
+    name + magenta palette family, and `star_slime` shares `nebula_cow`'s exact
+    accent hex `#e05ad8` — unchanged; this region's second exclusive slot is
+    exactly the extra one the progression-order data calls for).
+- **Shared pool (9):** `chicken`, `sheep`, `comet_duck`, `moon_rabbit`,
+  `biolume_fox`, `cosmic_tortoise`, `bee_swarm`, `butterfly_swarm`,
+  `firefly_swarm`. (`comet_duck` and `moon_rabbit` were Vale/Moon-assigned under
+  Phase 4's weaker theming signal; both lost their slot to a stronger-signal
+  animal once each region was capped at one exclusive, so they fall back to
+  shared — still fully consistent with their own flavor text, just not
+  exclusive to one place.)
+
+**Replaced spawn logic:** `AnimalSpawner.CanSpawnInRegion(animalId, regionId)`
+is the single source of truth (shared → always true; exclusive → true only for
+its one region). `SpawnIntoEligibleRegions` loops every region in
+`GameDatabase.Regions` and calls `TrySpawnOne` per region, which checks
+`CanSpawnInRegion` first — rejecting (returning `false`, spawning nothing) for
+ineligible regions. `SpawnOwned`/`TryBuy` both call this instead of the old
+single-region lookup, so **one purchase now produces one instance per eligible
+region** — 5 instances for a shared animal, 1 for an exclusive.
+
+**Known implication, flagged not fixed:** shared animals now produce coins from
+up to 5 simultaneous instances instead of 1 — up to a 5× income multiplier on
+those 9 animals' produce loop versus the pre-Phase-5 game. This is a direct,
+intended consequence of the user-specified model ("spawnable in all 5
+regions"), not a bug — flagging it here as a balance-relevant fact for whoever
+next tunes economy numbers, not deciding unilaterally to counter-balance it.
+
+**Verification evidence:**
+- Compile: `Logs/phase5_compile.log` — 0 `error CS` lines.
+- New tests (`Assets/Tests/PlayMode/AnimalRegionTests.cs`, fully rewritten, 3
+  cases): `Logs/test_results_p5animals.xml`, **3/3 PASS**.
+  - `SharedExclusiveSplit_MatchesSpec` (data-shape guard, no scene): iterates
+    all 15 animals × all 5 `regions.json` ids through `CanSpawnInRegion`,
+    asserts exactly 9 shared / 6 exclusive, and exactly 2 exclusives land on
+    `nebula_garden` vs. 1 each elsewhere — a living regression check of the
+    spec's own numbers, not just this phase's hand-picked examples.
+  - `SharedAnimal_SpawnsInEveryRegion`: buys `chicken`, reads back real
+    `AnimalController.transform.position` for every spawned instance against
+    real `RegionManager` bounds (`RegionWorldBuilder.BuildAll`, not asserted
+    bounds) — **5 instances, landing inside all 5 region bounds** (spec only
+    required "at least two").
+  - `ExclusiveAnimal_OnlyInAssignedRegion_RejectedElsewhere`: confirms
+    `CanSpawnInRegion("crater_goat", ...)` is **false** for Sun Garden and the
+    Vale, **true** only for Moon Garden; then buys it and confirms exactly **1**
+    real spawned instance, positioned inside Moon Garden's bounds and absent
+    from Sun Garden's and the Vale's.
+- Full-suite regression (same nographics/render split as Phases 2–4, with the
+  3 new tests replacing Phase 4's 1 in the nographics filter list): **56/56
+  PASS** (`Logs/p5_split_nographics.xml`) + **5/5 PASS**
+  (`Logs/p5_split_render.xml`) — **61/61 total, 0 failures.**
+
+**Phase 5: COMPLETE.**
+
+---
+
+## Phase 4 — animal region distribution (2026-07-05 ~20:40) — **SUPERSEDED by Phase 5 above (2026-07-05 ~21:10) — kept for history, do not build on this model**
+
+Original entry preserved as-written below; `AnimalSpawner.HomeRegionByAnimal`
+no longer exists in code as of Phase 5.
 
 **Research (before deciding anything):** `animals.json` has no region/home field.
 `regions.json` and `AnimalSpawner.cs` confirmed all 15 owned animals spawned into
