@@ -105,3 +105,6 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Node deps for the Tools/art sprite generator (Tools/art/build-cosmic.mjs)
+/Tools/art/node_modules/

@@ -34,22 +34,36 @@ namespace CosmicBloom.World
                 new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
 
             var body = go.AddComponent<SpriteRenderer>();
-            body.sprite = ProceduralSprites.Capsule();
-            body.color = ProceduralSprites.ParseHex(def.palette != null && def.palette.TryGetValue("body", out var b) ? b : null);
-            body.sortingOrder = 9;
             var mat = ProceduralSprites.LitMaterial;
+
+            // Real generated art if it loaded (Tools/art/build-cosmic.mjs output) — a
+            // full chibi character already carrying this NPC's palette, so no tint and
+            // no separate accent chip needed. Falls back to the tinted capsule +
+            // accent square when nothing was generated for this NPC id.
+            var generated = GeneratedSprites.Npc(def.id);
+            bool usingGenerated = generated != null;
+            body.sprite = usingGenerated ? generated : ProceduralSprites.Capsule();
+            body.color = usingGenerated
+                ? Color.white
+                : ProceduralSprites.ParseHex(def.palette != null && def.palette.TryGetValue("body", out var b) ? b : null);
+            body.sortingOrder = 9;
             if (mat != null) body.sharedMaterial = mat;
 
-            // accent chip so same-body NPCs still differ visually
-            var accentGo = new GameObject("Accent");
-            accentGo.transform.SetParent(go.transform, false);
-            accentGo.transform.localPosition = new Vector3(0f, 0.62f, 0f);
-            accentGo.transform.localScale = Vector3.one * 0.28f;
-            var accent = accentGo.AddComponent<SpriteRenderer>();
-            accent.sprite = ProceduralSprites.Square(32, 4);
-            accent.color = ProceduralSprites.ParseHex(def.palette != null && def.palette.TryGetValue("accent", out var a) ? a : null);
-            accent.sortingOrder = 10;
-            if (mat != null) accent.sharedMaterial = mat;
+            // accent chip so same-body NPCs still differ visually — only needed for
+            // the placeholder capsule; the generated character sprite already has a
+            // unique hair/outfit look baked in.
+            if (!usingGenerated)
+            {
+                var accentGo = new GameObject("Accent");
+                accentGo.transform.SetParent(go.transform, false);
+                accentGo.transform.localPosition = new Vector3(0f, 0.62f, 0f);
+                accentGo.transform.localScale = Vector3.one * 0.28f;
+                var accent = accentGo.AddComponent<SpriteRenderer>();
+                accent.sprite = ProceduralSprites.Square(32, 4);
+                accent.color = ProceduralSprites.ParseHex(def.palette != null && def.palette.TryGetValue("accent", out var a) ? a : null);
+                accent.sortingOrder = 10;
+                if (mat != null) accent.sharedMaterial = mat;
+            }
 
             var col = go.AddComponent<CircleCollider2D>();
             col.radius = 0.55f;

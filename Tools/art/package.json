@@ -1,0 +1,13 @@
+{
+  "name": "cosmic-bloom-art",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cosmic Bloom sprite generator — renders crop/NPC pixel art from Assets/Resources/GameData into Assets/Resources/Sprites/Generated. Run `npm install` then `npm run art` after crop/NPC palette data changes.",
+  "type": "module",
+  "scripts": {
+    "art": "node build-cosmic.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.2"
+  }
+}

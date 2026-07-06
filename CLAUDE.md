@@ -20,12 +20,14 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - `QuestEngine` is generic — reads `quests.json`, no per-quest code, ever. `GameEvents` is the pub/sub hub connecting farming/NPC/quest systems.
 - `SaveManager`: local-first, debounced, schema 2. Save fields are additive-only — new fields are fine, don't restructure existing ones without checking `server/routes/game.js#validateSnapshot` first.
 - New Input System only (`activeInputHandler: 1`). Never use `UnityEngine.Input` — it throws.
+- Generated sprites (crops + NPCs): `Tools/art/build-cosmic.mjs` (reused Farm&Give pixel-art library, copied into `Tools/art/`) renders PNGs from crops.json/npcs.json into `Assets/Resources/Sprites/Generated/` — rerun it (`npm run art` in `Tools/art`) after crop/NPC palette data changes. Loaded at runtime via `World.GeneratedSprites` with the old procedural placeholders as automatic fallback; animals/tiles/effects are still procedural placeholders.
 
 ## Verification discipline — do not skip this to save time
 - No live Unity MCP dependency for verification. Headless batchmode for compiles:
   `"D:\Unity\6000.5.2f1\6000.5.1f1\Editor\Unity.exe" -batchmode -nographics -projectPath "D:\Unity\Cosmic Bloom" -quit -logFile <path>`
 - Unity Test Runner PlayMode tests (headless `-runTests`) for behavior — not manual keypresses, not live Play-mode narration.
 - Evidence means an actual file: test XML, a log, a screenshot. Never report something as working without citing the file that proves it.
+- The nographics/render test split has a fixed, known-good filter list; pull it from the most recent p*_split_*.xml, don't rebuild it from class names.
 - Commit to git after every completed unit of work.
 - Content/design decisions (anything that changes story, quests, or what the game actually is) — stop and report, don't decide unilaterally, even unattended. Technical/mechanical judgment calls are fine to make and log.
 

@@ -2,6 +2,124 @@
 
 ---
 
+## Phase 5 — Farm&Give art pipeline reused for crop + NPC sprites (2026-07-06 ~01:10)
+
+**What was reused vs written new:**
+- Reused **verbatim copies** (no edits) of the old web game's procedural
+  pixel-art library from `D:\FarmandGiveGame\tools\art\`: `style.mjs` (Px
+  pixel buffer, shade/outline/blob, SCALE=2, TILE=32), `sprites/crops.mjs`
+  (`cropSprite`, 5 archetypes × 5 stages), `sprites/characters.mjs`
+  (`characterSprite`, chibi template) — copied into `Tools/art/` so this repo
+  has **no build-time dependency on the old repo**. The old `build.mjs` was
+  NOT reused (coupled to the web game's biomes/atlas layout).
+- Written new: `Tools/art/build-cosmic.mjs` — reads this project's own
+  `Assets/Resources/GameData/crops.json` + `npcs.json`, writes one 64×64 PNG
+  per frame to `Assets/Resources/Sprites/Generated/{Crops,Npcs}/`
+  (111 crop frames across 26 crops, 50 NPC portraits). Deterministic; rerun
+  via `npm run art` in `Tools/art` (deps: `@napi-rs/canvas`, installed
+  locally, `node_modules` gitignored). Also new: `GeneratedSprites` loader,
+  `GeneratedSpriteImporter` (editor), FarmPlot/NpcController wiring, and
+  `GeneratedArtTests`.
+
+**DECISION — game-stage → generator-stage mapping** (`stageMap` in
+build-cosmic.mjs): the generator has 5 fixed stages (0=sprout … 4=ready);
+crops.json has `stages` ∈ {3,4,5,6}. Game stage 0 maps to 0, the last game
+stage maps to 4, interiors spread proportionally via
+`round(s/(stages-1)*4)` with a monotonic guard. Deterministic results:
+stages=3 → [0,2,4]; stages=4 → **[0,1,3,4]** (the rounding picks 1 not 2 at
+s=1); stages=5 → [0,1,2,3,4]; stages=6 (heartseed only) → [0,1,2,2,3,4]
+(stage-2 art repeats once — acceptable for the one finale crop). PNG names
+use the **game** stage index: `<cropId>_<gameStage>.png`.
+
+**DECISION — NPC palette → character-template adapter** (npcs.json has only
+`palette.body`/`palette.accent`; the character template wants
+skin/hair/outfit/hat): `outfit = palette.body` (the body color IS the NPC's
+dominant read, same as the old capsule tint), `hair = palette.accent` (the
+accent chip's old job — differentiating same-body NPCs — moves to the hair),
+`skin = shade(palette.body, +0.35)` (a lightened tint of the body color:
+these are aliens/sprites, not humans, so skin stays in each NPC's own color
+family rather than borrowing a human skin ramp; shade() is the library's own
+lighten), `hat = 'none'` (no data signal to pick hats from; hats are the one
+template feature left unused). One static frame (`down`, frame 0) per NPC —
+no walk animation this pass, per scope.
+
+**DECISION — PPU 64** (`GeneratedSpriteImporter`, applies to everything under
+`Assets/Resources/Sprites/Generated/`): sprites are 32 logical px × SCALE 2 =
+64 px; farm plots sit on a default-cellSize Grid (1 world unit per cell,
+RegionWorldBuilder never changes it) and the placeholder plot Square was
+32 px at PPU 32 = exactly 1 world unit. PPU 64 keeps a 64-px generated sprite
+at exactly that same 1-unit footprint — crop fills its plot, and NPCs
+(26×34 px placeholder @ PPU 32 ≈ 0.81×1.06 units) stay the same ballpark
+since the character art fills most of its 32-px logical canvas. Also set:
+Sprite type, Point filter, no compression, no mipmaps; NPC pivot is custom
+(0.5, 0.06) — feet at the canvas bottom edge — matching the old Capsule's
+near-bottom pivot (0.5, 0.15) so spawn positions ground identically; crops
+keep center pivot like the placeholder Square.
+
+**Wiring (fallback-safe, no behavior changes):**
+- `World.GeneratedSprites` — cached `Resources.Load<Sprite>` by path
+  (`Sprites/Generated/Crops/<id>_<stage>`, `Sprites/Generated/Npcs/<id>`),
+  null (never throws) on miss; misses cached too.
+- `FarmPlot.RefreshVisual` — planted crop uses the generated sprite when it
+  loads (white base color + the existing needsWater/ready accent lerps kept,
+  slightly reduced); tinted-square placeholder path kept intact as fallback,
+  and empty/tilled plots still use the square. Scale/sorting/LitMaterial
+  (day/night Light2D) behavior unchanged.
+- `NpcController.Spawn` — body uses the generated portrait when it loads
+  (white color, LitMaterial kept, sortingOrder/collider/interaction
+  unchanged); the accent-chip child is **only created on the fallback path**
+  (capsule + tint + accent as before) since generated art bakes the accent
+  into the hair.
+
+**Verification evidence:**
+- Generator output: 111 + 50 PNGs, all 64×64 (spot-verified), deterministic
+  rerun produces identical bytes.
+- Compile: `Logs/phase5_compile.log` and (post-wiring) `phase5_compile2.log`
+  — 0 `error CS` in both.
+- Import settings really applied: spot-checked generated `.png.meta` files —
+  `spritePixelsToUnits: 64`, `filterMode: 0` (Point), `textureCompression:
+  Uncompressed`, NPC `spritePivot: {x: 0.5, y: 0.06}` / crop center pivot.
+- New test `GeneratedArtTests.FarmPlotAndNpc_ShowGeneratedSprites_Screenshot`
+  (render half — it screenshots): asserts the plot's SpriteRenderer holds the
+  actual generated crop sprite at final stage (`AreSame`, not color checks),
+  the NPC body holds its generated portrait, and no Accent child exists on a
+  generated-art NPC. Solo run: `Logs/phase5_solo.xml` **1/1 PASS**.
+  Screenshot `Logs/phase5_sprites.png` — visually confirmed: pixel-art chibi
+  NPCs (distinct palettes) + ripe berry-bush crop at plot (10,10), no colored
+  squares.
+- Full regression, same nographics/render split as Phases 2–4b:
+  - nographics half (Phase 4b's 56-test method-level list):
+    `Logs/phase5_split_nographics_v3.xml` — **56/56 PASS**.
+  - render half (5 existing captures + the new test, no `-nographics`):
+    `Logs/phase5_split_render_v2.xml` — **6/6 PASS**.
+  - **Total 62/62, 0 failures.**
+
+**Incident + lesson (cost two crashed runs):** the first two nographics
+attempts (`Logs/phase5_split_nographics.log`, `..._v2.log`) native-crashed in
+`ScriptableRenderContext.Submit` during
+`CoreUiTests.CaptureEachUiScreen_Portrait` — because I built the
+`-testFilter` from **class names**, and five classes (CoreUiTests,
+DayNightTests, MobileScreenTests, RegionWorldTests, ToolAnimalTests) mix
+nographics-safe tests with render/capture tests. The split has always been
+**method-level**; class-level filtering pulls `Camera.Render()` tests into
+`-nographics`, which is exactly the crash the split exists to prevent. Fix:
+extract the known-good 56 fullnames from the previous session's split XML.
+Note for future sessions: `Logs/p5_split_nographics.xml` / `p5_split_render.xml`
+(dated 7/5 21:19) are a **previous session's** results for Phase 4b — 
+this phase's results are the `phase5_*` files listed above; don't cite the
+`p5_*` pair as Phase 5 evidence.
+
+**Known gaps / not done (scope):** animals, tiles, effects, icons still
+procedural placeholders; NPCs are a single static `down` frame (no walk
+animation, no direction facing); crops with stages=6 repeat one art stage;
+tool/UI icons untouched. `Tools/art/node_modules` gitignored;
+`Tools/art/package.json` + lockfile committed so `npm install && npm run art`
+reproduces the pipeline.
+
+**Phase 5: COMPLETE.**
+
+---
+
 ## Phase 4b — animal shared-pool/exclusive model, replacing Phase 4 (2026-07-05 ~21:10)
 
 **Phase 4's one-home-region model is superseded, not layered on top** — see

@@ -97,29 +97,51 @@ namespace CosmicBloom.Farming
             Debug.Log($"[FarmPlot] {regionId}({gridX},{gridY}) action={action ?? "none"} cells={done}");
         }
 
+        static readonly Sprite PlotSquare = World.ProceduralSprites.Square(32, 6);
+
         public void RefreshVisual()
         {
             if (_sr == null) return;
             var plot = LivePlot();
             if (plot == null || !plot.tilled)
             {
+                _sr.sprite = PlotSquare;
                 _sr.color = EmptyColor;
                 transform.localScale = Vector3.one;
                 return;
             }
             if (plot.crop == null)
             {
+                _sr.sprite = PlotSquare;
                 _sr.color = TilledColor;
                 transform.localScale = Vector3.one;
                 return;
             }
 
             var def = GameDatabase.Crop(plot.crop.id);
-            Color crop = def != null ? World.ProceduralSprites.ParseHex(def.color) : Color.magenta;
             float stageT = def != null && def.stages > 1 ? plot.crop.stage / (float)(def.stages - 1) : 1f;
-
-            _sr.color = Color.Lerp(TilledColor, crop, 0.35f + stageT * 0.65f);
             transform.localScale = Vector3.one * (0.85f + stageT * 0.15f);
+
+            // Real generated art if it loaded (Tools/art/build-cosmic.mjs output); the
+            // sprite already carries the crop's color, so start from white instead of
+            // the placeholder's crop-color lerp. Falls back to the tinted square below
+            // when nothing was generated for this crop/stage (or archetype coverage
+            // gaps in the generator).
+            var generated = World.GeneratedSprites.Crop(plot.crop.id, plot.crop.stage);
+            if (generated != null)
+            {
+                _sr.sprite = generated;
+                _sr.color = Color.white;
+                if (plot.crop.needsWater)
+                    _sr.color = Color.Lerp(_sr.color, WaterAccent, 0.30f);
+                else if (def != null && plot.crop.stage >= def.stages - 1)
+                    _sr.color = Color.Lerp(_sr.color, ReadyAccent, 0.20f);
+                return;
+            }
+
+            _sr.sprite = PlotSquare;
+            Color crop = def != null ? World.ProceduralSprites.ParseHex(def.color) : Color.magenta;
+            _sr.color = Color.Lerp(TilledColor, crop, 0.35f + stageT * 0.65f);
 
             if (plot.crop.needsWater)
                 _sr.color = Color.Lerp(_sr.color, WaterAccent, 0.35f);
