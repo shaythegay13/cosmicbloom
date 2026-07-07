@@ -108,3 +108,9 @@ InitTestScene*.unity*
 
 # Node deps for the Tools/art sprite generator (Tools/art/build-cosmic.mjs)
 /Tools/art/node_modules/
+
+# Gemini batch-generation output/inputs (Tools/art/gemini-batch.mjs) — raw,
+# uncurated API output and local reference images, not reviewed assets
+/Tools/art/gemini-out/
+/Tools/art/gemini-ref/
+/Tools/art/gemini-failures.log
