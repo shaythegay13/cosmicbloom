@@ -5,6 +5,15 @@
 // DECISION (overnight run): produce has no price data, so collecting grants
 // coins = max(2, cost/40) alongside the GameEvents.ItemGranted signal that
 // `collect` quest steps (e.g. q_egg_basket's glowing_egg ×5) consume.
+//
+// DECISION (Phase 8 economy fix): the produce clock is per SPECIES, not per
+// instance. A shared animal spawns an instance in every owned region (up to 5),
+// but owning it is one purchase — so it gets exactly one produce stream:
+// collecting from any instance consumes the produce and reschedules the species
+// clock, and every other instance stops reading ready. This closes the Phase 4b
+// flagged 5x-income implication while keeping the multi-region instances as
+// pure world ambience.
+using System.Collections.Generic;
 using CosmicBloom.Core;
 using CosmicBloom.Data;
 using UnityEngine;
@@ -19,12 +28,19 @@ namespace CosmicBloom.World
         Vector3 _home;
         Vector3 _wanderTarget;
         float _nextWander;
-        long _produceReadyAt;
         SpriteRenderer _body;
         bool _usingGeneratedSprite;
 
+        // one produce clock per species, shared by every spawned instance
+        static readonly Dictionary<string, long> _produceReadyBySpecies = new();
+
+        /// <summary>Session/test hygiene — cleared alongside AnimalSpawner.ClearAll()
+        /// and on SpawnOwned() so a fresh session restarts all timers.</summary>
+        public static void ResetProduceClocks() => _produceReadyBySpecies.Clear();
+
         public bool ProduceReady =>
-            Def.produceMinutes > 0 && NowMs() >= _produceReadyAt;
+            Def.produceMinutes > 0 &&
+            _produceReadyBySpecies.TryGetValue(Def.id, out var readyAt) && NowMs() >= readyAt;
 
         public Vector3 InteractPosition => transform.position;
 
@@ -59,18 +75,21 @@ namespace CosmicBloom.World
             animal._home = home;
             animal._body = body;
             animal._usingGeneratedSprite = usingGenerated;
-            animal.ScheduleProduce();
+            // only the first instance of a species starts the clock — later
+            // instances (other regions) must not push the ready time back
+            if (def.produceMinutes > 0 && !_produceReadyBySpecies.ContainsKey(def.id))
+                animal.ScheduleProduce();
             return animal;
         }
 
         void ScheduleProduce()
         {
             if (Def.produceMinutes > 0)
-                _produceReadyAt = NowMs() + (long)(Def.produceMinutes * 60_000f);
+                _produceReadyBySpecies[Def.id] = NowMs() + (long)(Def.produceMinutes * 60_000f);
         }
 
-        /// <summary>Test/debug hook: make produce collectable now.</summary>
-        public void ForceProduceReady() => _produceReadyAt = NowMs() - 1;
+        /// <summary>Test/debug hook: make produce collectable now (species-wide).</summary>
+        public void ForceProduceReady() => _produceReadyBySpecies[Def.id] = NowMs() - 1;
 
         void Update()
         {

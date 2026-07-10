@@ -28,6 +28,7 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
 - Unity Test Runner PlayMode tests (headless `-runTests`) for behavior — not manual keypresses, not live Play-mode narration.
 - Evidence means an actual file: test XML, a log, a screenshot. Never report something as working without citing the file that proves it.
 - The nographics/render test split has a fixed, known-good filter list; pull it from the most recent p*_split_*.xml, don't rebuild it from class names.
+- The two 2026-07-05 crash signatures are CLOSED (root-caused P3-Phase 8, 2026-07-09 — see BUILD_LOG): the "DelayedCallManager/coroutine" crash was the render-surface crash misclassified (deterministic repro: any `Camera.Render()` test under `-nographics`; the split already prevents it), and the WorkerManagerASIO exit crash/hang is a Unity-internal asset-import-worker teardown race that fires strictly *after* the results XML is written. Operational rule: if a batchmode process lingers after the results XML exists, force-kill it and trust the XML.
 - Before rebuilding any multi-step mechanism (test filters, build scripts, data lookups), check whether a working version already exists from a prior phase and reuse it verbatim instead of re-deriving it. Re-derivation is the pattern behind three separate 2026-07-06 incidents: stale-XML confusion, a rebuilt test filter that crashed Unity twice, and general re-verification overhead.
 - Commit to git after every completed unit of work.
 - Content/design decisions (anything that changes story, quests, or what the game actually is) — stop and report, don't decide unilaterally, even unattended. Technical/mechanical judgment calls are fine to make and log.
@@ -51,8 +52,12 @@ Unity 6 (6000.5.1f1) mobile farming game. Data-driven core loop: farm → rewild
   `unlockLevel` (20)). The other 9 animals are shared. See BUILD_LOG.md Phase 4b
   for the full per-animal rationale. `AnimalSpawner.CanSpawnInRegion` is the
   source of truth; `SpawnOwned`/`TryBuy` spawn one instance per eligible
-  region, so a shared animal produces from up to 5 simultaneous instances
-  (flagged economic implication, not a bug — see BUILD_LOG). Known gap, not
+  region. The Phase 4b flagged 5x-income implication is **FIXED (P3-Phase 8,
+  2026-07-09)**: the produce clock is per *species*
+  (`AnimalController._produceReadyBySpecies`), shared by every spawned
+  instance — collecting from any instance consumes THE produce and
+  reschedules species-wide, so income is 1x per owned animal and the
+  multi-region instances are pure world ambience. Known gap, not
   fixed: buying an animal only checks `unlockLevel`/coins, not whether its
   exclusive region is unlocked yet — harmless since all 5 regions are always
   built/registered, the animal just waits there.

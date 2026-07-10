@@ -43,6 +43,7 @@ namespace CosmicBloom.World
             foreach (var a in _spawned) if (a != null) Object.Destroy(a.gameObject);
             _spawned.Clear();
             _countByRegion.Clear();
+            AnimalController.ResetProduceClocks();
         }
 
         public static void SpawnOwned(GameState state, RegionManager regions)
@@ -50,6 +51,7 @@ namespace CosmicBloom.World
             foreach (var old in _spawned.Where(a => a != null)) Object.Destroy(old.gameObject);
             _spawned.Clear();
             _countByRegion.Clear();
+            AnimalController.ResetProduceClocks();
             foreach (var id in state.Save.animals)
                 SpawnIntoEligibleRegions(id, state, regions);
             Debug.Log($"[AnimalSpawner] spawned {_spawned.Count} owned animal instances");

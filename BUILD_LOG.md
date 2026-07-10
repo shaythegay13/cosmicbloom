@@ -2,6 +2,178 @@
 
 ---
 
+## P3-Phase 8 — Close the open loose ends (2026-07-09 ~23:45)
+
+Ran after P3-Phase 9 (which went deliberately ahead — see its own header note).
+All four loose ends closed; nothing carried forward open except the two
+explicitly human-side items in §4.
+
+### 1. Crash signatures (2) and (3) — CLOSED, root-caused from existing logs
+
+**(3) `DelayedCallManager::Update → Coroutine::ContinueCoroutine →
+mono_runtime_invoke` — was never a distinct crash. It is the render-surface
+crash (signature 1) misclassified.** Evidence, all from logs already on disk:
+
+- Every instance of the `DelayedCallManager::Update` native crash frame in the
+  project's history — six: `phase2_tests.log:8717`, `phase2_tests_b.log:1190`,
+  `phase2_full2.log:1139`, `cleanboot.log:3261`,
+  `phase5_split_nographics.log:1808`, `phase5_split_nographics_v2.log:1688` —
+  carries the **identical managed stack**:
+  `CosmicBloom.Tests.CoreUiTests/<Capture>d__10:MoveNext → Camera.Render →
+  UniversalRenderPipeline → ScriptableRenderContext.Submit`
+  (e.g. `phase2_full2.log:1127`, `phase2_tests.log:8505`).
+- The clincher: the run BUILD_LOG recorded as **confirming signature (1)**
+  (`cleanboot.log`, the clean-reboot repro that produced "Unable to find
+  surface for attachment 0") crashes through `DelayedCallManager::Update`
+  itself (`cleanboot.log:3261`) with the same `Capture` managed stack
+  (`cleanboot.log:3017`). The frame treated as signature (3)'s fingerprint is
+  present in signature (1)'s confirmed instance — it was never a
+  distinguishing feature. `DelayedCallManager::Update →
+  Coroutine::ContinueCoroutine` is simply the engine's coroutine pump: every
+  `[UnityTest]` body executes under it, so ANY crash inside a PlayMode test
+  coroutine shows those bottom frames.
+- The two 2026-07-06 `phase5_split_nographics` v1/v2 crashes (the "rebuilt
+  test filter crashed Unity twice" incident) show the same
+  "Unable to find surface for attachment 0" errors immediately before the
+  crash (`phase5_split_nographics.log:1386-1556`) — the re-derived filter had
+  dragged `CaptureEachUiScreen_Portrait` back under `-nographics`.
+- Why the misclassification happened: the 2026-07-05 session compared the
+  *native bottom frames* of one instance against the *managed top frames* of
+  another and coined two signatures. The MCP-relay theory was a red herring —
+  `[relay]` lines appear in every batchmode log, crashing or not.
+- **Reliable reproduction condition (deterministic):** run any test that calls
+  `Camera.Render()` under `-nographics`. Why it "hasn't recurred": the
+  nographics/render split removed the trigger from every correctly-filtered
+  run; both post-split recurrences were filter mistakes, not spontaneous.
+
+**(2) `WorkerManagerASIO`/`TcpMessagingServerClientSession` shutdown
+crash-then-hang — root-caused to a Unity-internal editor-exit teardown race.
+Exogenous to project code; provably harmless to verification.** Evidence from
+`phase2_regression.log`, its only occurrence (2026-07-05 11:46):
+
+- The crash fires strictly **after the test run completed**: the managed stack
+  at the crash is `EditorApplication:Exit ←
+  CommandLineTest.Executer:ExitIfRunIsCompleted`
+  (`phase2_regression.log:941-943`) — the runner had already finished and
+  initiated normal editor exit. Results are flushed before this point, so the
+  crash cannot invalidate a test run (that particular run's XML was the
+  `testcasecount="0"` comma-filter miss anyway).
+- Failure sequence in the log (lines 916-947): AssetImportWorkerHW0 fails to
+  exit within the shutdown timeout → "force killed 1 workers" →
+  "WorkerManagerASIO did not receive session closed signal (0/1 closed)" →
+  "Lingering sessions upon destruction of worker manager" → native crash in
+  `WorkerManagerASIO::~WorkerManagerASIO` (lines 1103-1104). The observed
+  hang is the crash handler holding the dead process after an exit-path crash.
+- The benign variant of the same race — the warning without the crash —
+  appears in at least six **passing** runs (`phase0_cleanup.log:720`,
+  `p2_split_nographics.log:7328`, `p3_split_nographics.log:9502`,
+  `phase7_split_nographics.log:12710`, `phase8_split_nographics.log:11659`,
+  `test_run_p10b2.log:1165`): the worker usually misses the session-closed
+  handshake and teardown survives anyway. One crash in 60+ batchmode
+  invocations; the trigger (worker exceeding the shutdown timeout) is timing,
+  i.e. machine-load-dependent, which is why no repro-on-demand exists.
+- Not RAM, not the Android build target, not the MCP relay, not project code:
+  the entire failure lives in Unity's out-of-process asset-import worker
+  teardown, after user code has finished running. Nothing at project level
+  can fix it; an Editor version upgrade is the only real fix vector if it
+  starts recurring. **Operational rule (added to CLAUDE.md):** if a batchmode
+  process lingers after the results XML is written, force-kill it and trust
+  the XML.
+
+### 2. q_festival_circuit day-rollover — CONFIRMED deliberate, keep as-is
+
+Not an unreviewed side effect. The reset was designed, documented, and
+test-covered at build time:
+- The P3 build entry (this file, 2026-07-05 ~17:45) specifies it in the
+  mechanism description: "within a single in-game day (`TimeManager.DayNumber`;
+  a day rollover restarts partial tallies)".
+- It follows directly from the user-approved ruling (CLAUDE.md quest-stub
+  rulings): "4 distinct NPCs of one Sacred Garden within one in-game day = one
+  festival" — a one-day window *is* the festival definition; clearing partial
+  talk tallies at rollover is that rule's mechanism, and matches the fiction
+  (a festival is a single-day event you either pull off or don't).
+- Scope check (`QuestEngine.HandleFestivalTalk`): rollover clears only the
+  in-progress NPC-talk tally (`FestivalTally.talked`). **Already-hosted
+  gardens persist** (`_distinct` set + save-backed `questStepProgress`) — the
+  4-garden circuit itself never resets; it can be completed across any number
+  of days, one festival at a time.
+- Dedicated test existed from day one and still passes in this phase's
+  regression: `QuestGapPhase3Tests.HostFestival_DayRollover_RestartsPartialTally`
+  (3-of-4 partial tally resets at rollover; full 4-NPC run within the new day
+  hosts).
+**DECISION: behavior stands.** No code change.
+
+### 3. Shared-animal 5x income — FIXED: species-wide produce clock
+
+The Phase 4b flag: a shared animal spawns an instance in every owned region
+(up to 5), and each instance carried its own produce timer — one purchase, up
+to 5 parallel income streams.
+
+- **Fix chosen** (the spec's "another approach" option): the produce clock is
+  now per *species*, shared by all instances —
+  `AnimalController._produceReadyBySpecies` (static map) replaces the
+  per-instance `_produceReadyAt`. First spawn of a species starts its clock
+  (later instances don't push the ready time back); collecting from ANY
+  instance grants the coins/item once and reschedules species-wide, so every
+  other instance stops reading ready at that instant. `ForceProduceReady` is
+  species-wide to match. `AnimalSpawner.ClearAll()`/`SpawnOwned()` reset the
+  clocks (test hygiene + fresh-session timer restart, same lifecycle the
+  spawn list already had).
+- Why this over an instance cap or diminishing returns: income becomes exactly
+  1x per owned animal (shared animals now identical to exclusives — no new
+  balance constants to tune before Phase 11 monetization), while the
+  multi-region instances survive untouched as pure world ambience, which is
+  what they visually were. An instance cap would have deleted the ambience;
+  diminishing returns would have added tuning surface for no design win.
+- No save-schema impact (timers were never persisted; respawn always
+  rescheduled — unchanged).
+- New test `Phase8LooseEndTests.SharedAnimal_OneProduceStreamAcrossRegions`:
+  2 registered regions → 2 chicken instances; not ready at spawn; force-ready
+  reads on both instances (shared clock); collecting on one pays once and
+  un-readies the other; interacting with the second pays nothing.
+- Phase 13's balance pass should confirm observed income rates changed, per
+  the spec's own note.
+
+### 4. Human-only verification items — NEVER DONE; flagged loudly, not silently
+
+Audited the full log: both items were flagged in the original build's morning
+review queue (#9, 2026-07-05), re-flagged in Phase 7's carry-forward list, and
+**no entry anywhere since claims either was performed.** Status as of
+2026-07-09: **not done, still owed by a human.**
+1. Device Simulator pass — notch/safe-area handling, GUI-only.
+2. In-editor feel check — camera follow + day/night transition at real
+   timescale (all automated checks ran at accelerated time).
+The closest automated artifacts (`phase11_tallphone.png` at 1080×2340, the
+Phase 0 Android-emulator screenshots, `phase7_noon.png`/`phase7_midnight.png`)
+are adjacent but do NOT substitute — neither simulates a notch nor plays at
+1x speed. These two are Shay-side tasks; they should land in Phase 13's
+playtest checklist rather than being re-inherited as ambient "still open"
+items by every future spec.
+
+### Verification evidence
+- Compile: `Logs/phase8b_compile.log` — 0 `error CS` lines.
+- Full regression, split filters pulled verbatim from
+  `Logs/phase9b_split_nographics.xml` (57 fullnames) +
+  `Logs/phase9b_split_render_names.txt` (10 fullnames), not rebuilt:
+  - nographics half (57 + the 1 new Phase 8 test = 58):
+    `Logs/phase8b_split_nographics.xml` — **58/58 PASS**.
+  - render half (10, unchanged): `Logs/phase8b_split_render.xml` —
+    **10/10 PASS**.
+  - **Total: 68/68, 0 failures.**
+- (First nographics attempt exited rc=1 in ~2s right after licensing logged
+  "Access token is unavailable" — same documented transient as Phase 3's
+  first attempt, 2026-07-05; identical rerun proceeded normally. One render
+  launch also produced no run at all: PowerShell `Start-Process -ArgumentList`
+  with an *array* joins elements unquoted, so the space in the project path
+  split `-projectPath` — pass one pre-quoted argument string instead.)
+
+**P3-Phase 8: COMPLETE ✅** — both crash signatures closed with root causes,
+festival rollover confirmed deliberate, shared-animal income fixed to 1x and
+regression-proven, human-only items explicitly flagged as still owed
+(→ Phase 13 playtest checklist).
+
+---
+
 ## P3-Phase 9 — Extend art pipeline to animals and tiles (2026-07-06 ~09:10)
 
 **Run deliberately ahead of Phase 8** (explicit instruction — Phase 8's crash
