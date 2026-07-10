@@ -31,17 +31,17 @@ namespace CosmicBloom.Tests
             var farming = new FarmingSystem(state);
 
             // tier 1 (cosmic_hoe, default loadout): one plot per tap
-            int done = ToolService.Perform(farming, state, "till", 8, 8);
+            int done = ToolService.Perform(farming, state, "till", 16, 16);
             Assert.AreEqual(1, done, "tier-1 hoe tills exactly the tapped cell");
-            Assert.IsNull(farming.PlotAt(7, 8), "neighbor untouched");
+            Assert.IsNull(farming.PlotAt(15, 16), "neighbor untouched");
 
             // tier 3 (cosmic_hoe_3, "3x1 row"): three cells in one tap
             state.Save.tools.Add("cosmic_hoe_3");
             ToolService.SelectTool(state, "cosmic_hoe_3");
-            done = ToolService.Perform(farming, state, "till", 10, 10);
+            done = ToolService.Perform(farming, state, "till", 20, 20);
             Assert.AreEqual(3, done, "tier-3 hoe tills a 3x1 row");
-            Assert.IsNotNull(farming.PlotAt(9, 10));
-            Assert.IsNotNull(farming.PlotAt(11, 10));
+            Assert.IsNotNull(farming.PlotAt(19, 20));
+            Assert.IsNotNull(farming.PlotAt(21, 20));
             Debug.Log($"[P6Test] till: tier1=1 cell, tier3=3 cells — different behavior confirmed");
         }
 
@@ -54,15 +54,15 @@ namespace CosmicBloom.Tests
 
             // plant a 3x3 block of thirsty crops
             state.Save.seeds["starlight_berry"] = 9;
-            for (int y = 9; y <= 11; y++)
-                for (int x = 9; x <= 11; x++)
+            for (int y = 15; y <= 17; y++)
+                for (int x = 15; x <= 17; x++)
                 { farming.Till(x, y); farming.Plant(x, y, "starlight_berry"); }
 
             ToolService.SelectTool(state, "nebula_mister");
-            int watered = ToolService.Perform(farming, state, "water", 10, 10);
+            int watered = ToolService.Perform(farming, state, "water", 16, 16);
             Assert.AreEqual(9, watered, "tier-3 mister waters the whole 3x3");
-            Assert.IsFalse(farming.PlotAt(9, 9).crop.needsWater);
-            Assert.IsFalse(farming.PlotAt(11, 11).crop.needsWater);
+            Assert.IsFalse(farming.PlotAt(15, 15).crop.needsWater);
+            Assert.IsFalse(farming.PlotAt(17, 17).crop.needsWater);
         }
 
         [Test]
@@ -80,7 +80,7 @@ namespace CosmicBloom.Tests
         {
             GameEvents.Clear();
             var regions = new GameObject("TestRegions").AddComponent<RegionManager>();
-            regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(10, 10), new Vector3(20, 20)));
+            regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(20, 20), new Vector3(40, 40)));
             var state = NewState(coins: 1000);
             state.Save.level = 10;   // clears unlockLevel gates for early animals
 
@@ -134,7 +134,7 @@ namespace CosmicBloom.Tests
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 8f;
-            cam.transform.position = new Vector3(10f, 8f, -10f);
+            cam.transform.position = new Vector3(12f, 7f, -10f);   // paddock row sits at y≈7 after the resize
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 

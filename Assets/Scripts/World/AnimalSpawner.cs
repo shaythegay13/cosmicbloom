@@ -85,10 +85,11 @@ namespace CosmicBloom.World
             if (def == null) return false;
             if (!regions.TryGetBounds(regionId, out var bounds)) return false;
 
-            // stable little paddock spots below the lush core, deterministic by index within the region
+            // stable little paddock spots below the lush core, deterministic by index
+            // within the region (offsets scaled 2x with the P3-Phase 15 region resize)
             int i = _countByRegion.TryGetValue(regionId, out var c) ? c : 0;
             _countByRegion[regionId] = i + 1;
-            var home = bounds.center + new Vector3(-5f + (i % 6) * 2f, -6.5f + (i / 6) * 2f, 0f);
+            var home = bounds.center + new Vector3(-10f + (i % 6) * 4f, -13f + (i / 6) * 4f, 0f);
             _spawned.Add(AnimalController.Spawn(def, home, state));
             return true;
         }

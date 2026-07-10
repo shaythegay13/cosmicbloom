@@ -10,9 +10,10 @@ namespace CosmicBloom.World
     public static class LandmarkSpawner
     {
         // slots around the lush core, per landmark index within its region
+        // (scaled 2x with the P3-Phase 15 region resize to 40x40)
         static readonly Vector3[] Slots =
         {
-            new(-6.5f, 5.5f), new(0f, 7f), new(6.5f, 5.5f), new(-6.5f, -5.5f), new(6.5f, -5.5f),
+            new(-13f, 11f), new(0f, 14f), new(13f, 11f), new(-13f, -11f), new(13f, -11f),
         };
 
         public static List<LandmarkController> SpawnAll(RegionManager regions, GameState state)

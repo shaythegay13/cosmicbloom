@@ -20,8 +20,8 @@ namespace CosmicBloom.Tests
         {
             var go = new GameObject("TestRegionManager");
             _regions = go.AddComponent<RegionManager>();
-            // Same shape as StarlightVale: 20x20 world units starting at origin
-            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(10, 10), new Vector3(20, 20)));
+            // Same shape as StarlightVale: 40x40 world units starting at origin
+            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(20, 20), new Vector3(40, 40)));
             _player = PlayerController.Spawn(new Vector3(10, 10));
         }
 
@@ -52,12 +52,12 @@ namespace CosmicBloom.Tests
         [UnityTest]
         public IEnumerator TapOutsideBoundsClampsToRegionEdge()
         {
-            _player.OnTapWorld(new Vector3(500, -300));   // far outside the 20x20 region
+            _player.OnTapWorld(new Vector3(500, -300));   // far outside the 40x40 region
 
             Assert.IsNotNull(_player.MoveTarget);
             var t = _player.MoveTarget.Value;
             Debug.Log($"[P1Test] clamped target={t}");
-            Assert.LessOrEqual(t.x, 20f, "x clamped to region max");
+            Assert.LessOrEqual(t.x, 40f, "x clamped to region max");
             Assert.GreaterOrEqual(t.y, 0f, "y clamped to region min");
 
             float timeout = Time.time + 8f;
@@ -65,7 +65,7 @@ namespace CosmicBloom.Tests
 
             var p = _player.transform.position;
             Debug.Log($"[P1Test] stopped at={p}");
-            Assert.IsTrue(p.x >= 0f && p.x <= 20f && p.y >= 0f && p.y <= 20f,
+            Assert.IsTrue(p.x >= 0f && p.x <= 40f && p.y >= 0f && p.y <= 40f,
                 $"player must stay inside region bounds, was {p}");
         }
 

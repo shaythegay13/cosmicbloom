@@ -112,7 +112,7 @@ namespace CosmicBloom.Tests
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 7f;
-            cam.transform.position = new Vector3(10, 10, -10);
+            cam.transform.position = new Vector3(20, 20, -10);
             cam.backgroundColor = new Color(0.06f, 0.05f, 0.12f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 

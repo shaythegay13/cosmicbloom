@@ -34,9 +34,9 @@ namespace CosmicBloom.Tests
             _cam = camGo.AddComponent<Camera>();
             _cam.orthographic = true;
             _cam.orthographicSize = 7f;
-            _cam.transform.position = new Vector3(10, 10, -10);
+            _cam.transform.position = new Vector3(20, 20, -10);   // vale center after the 40x40 resize
 
-            _player = PlayerController.Spawn(new Vector3(10, 10));
+            _player = PlayerController.Spawn(new Vector3(20, 20));
         }
 
         public override void TearDown()
@@ -55,8 +55,8 @@ namespace CosmicBloom.Tests
             var touchscreen = InputSystem.AddDevice<Touchscreen>();
             yield return null;
 
-            // tap the screen point that projects to world (14, 12)
-            Vector3 screen = _cam.WorldToScreenPoint(new Vector3(14, 12, 0));
+            // tap the screen point that projects to world (24, 22)
+            Vector3 screen = _cam.WorldToScreenPoint(new Vector3(24, 22, 0));
             BeginTouch(1, new Vector2(screen.x, screen.y), screen: touchscreen);
             yield return null;
             Debug.Log($"[P11Diag] Pointer.current={UnityEngine.InputSystem.Pointer.current?.GetType().Name} " +
@@ -67,13 +67,13 @@ namespace CosmicBloom.Tests
             yield return null;
 
             Assert.IsNotNull(_player.MoveTarget, "touch tap set a move target");
-            Assert.AreEqual(14f, _player.MoveTarget.Value.x, 0.2f, "target x from touch");
-            Assert.AreEqual(12f, _player.MoveTarget.Value.y, 0.2f, "target y from touch");
+            Assert.AreEqual(24f, _player.MoveTarget.Value.x, 0.2f, "target x from touch");
+            Assert.AreEqual(22f, _player.MoveTarget.Value.y, 0.2f, "target y from touch");
             Debug.Log($"[P11Test] touch at screen {screen} → move target {_player.MoveTarget}");
 
             float deadline = Time.time + 5f;
             while (_player.MoveTarget != null && Time.time < deadline) yield return null;
-            Assert.Less(Vector3.Distance(_player.transform.position, new Vector3(14, 12)), 0.1f,
+            Assert.Less(Vector3.Distance(_player.transform.position, new Vector3(24, 22)), 0.1f,
                 "player walked to the touched point");
             Debug.Log($"[P11Test] player arrived at {_player.transform.position} via touch input");
         }
@@ -87,16 +87,16 @@ namespace CosmicBloom.Tests
             FarmGrid.Create("starlight_vale", _grids["starlight_vale"], farming, state);
             yield return new WaitForFixedUpdate();
 
-            _player.transform.position = new Vector3(8.2f, 7.5f);   // in range of plot (7,7)
-            Vector3 screen = _cam.WorldToScreenPoint(new Vector3(7.5f, 7.5f, 0));
+            _player.transform.position = new Vector3(17.2f, 16.5f);   // in range of plot (16,16)
+            Vector3 screen = _cam.WorldToScreenPoint(new Vector3(16.5f, 16.5f, 0));
             BeginTouch(1, new Vector2(screen.x, screen.y), screen: touchscreen);
             yield return null;
             EndTouch(1, new Vector2(screen.x, screen.y), screen: touchscreen);
             yield return null;
 
-            Assert.IsNotNull(farming.PlotAt(7, 7), "touch tap tilled the plot");
-            Assert.IsTrue(farming.PlotAt(7, 7).tilled);
-            Debug.Log("[P11Test] plot (7,7) tilled via touchscreen tap ✓");
+            Assert.IsNotNull(farming.PlotAt(16, 16), "touch tap tilled the plot");
+            Assert.IsTrue(farming.PlotAt(16, 16).tilled);
+            Debug.Log("[P11Test] plot (16,16) tilled via touchscreen tap ✓");
         }
     }
 
@@ -120,7 +120,7 @@ namespace CosmicBloom.Tests
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 8f;
-            cam.transform.position = new Vector3(10, 10, -10);
+            cam.transform.position = new Vector3(20, 20, -10);
             cam.backgroundColor = new Color(0.06f, 0.05f, 0.12f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 

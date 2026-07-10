@@ -37,7 +37,9 @@ namespace CosmicBloom.World
             _regionBounds.TryGetValue(regionId, out bounds);
 
         public Bounds CurrentBounds =>
-            _regionBounds.TryGetValue(CurrentRegionId, out var b) ? b : new Bounds(Vector3.zero, Vector3.one * 20f);
+            _regionBounds.TryGetValue(CurrentRegionId, out var b)
+                ? b
+                : new Bounds(Vector3.zero, Vector3.one * RegionWorldBuilder.Size);
 
         /// <summary>Set the active region (travel). Unlock checks happen at the call site.</summary>
         public void SetCurrentRegion(string regionId)

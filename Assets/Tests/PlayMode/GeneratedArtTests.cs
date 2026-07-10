@@ -61,21 +61,21 @@ namespace CosmicBloom.Tests
             // known farmable plot so the screenshot captures real, non-sprout art.
             var crop = GameDatabase.Crops.First(c => c.region == "starlight_vale");
             _state.Save.seeds[crop.id] = 1;
-            _farming.Till(10, 10);
-            Assert.IsTrue(_farming.Plant(10, 10, crop.id), $"plant {crop.id} at (10,10)");
-            var plot = _farming.PlotAt(10, 10);
+            _farming.Till(16, 16);
+            Assert.IsTrue(_farming.Plant(16, 16, crop.id), $"plant {crop.id} at (16,16)");
+            var plot = _farming.PlotAt(16, 16);
             plot.crop.stage = crop.stages - 1;
             plot.crop.needsWater = false;
             yield return null;   // FarmPlot.LateUpdate refreshes visuals from live state
 
-            var plotGo = GameObject.Find("Plot_10_10");
+            var plotGo = GameObject.Find("Plot_16_16");
             Assert.IsNotNull(plotGo, "plot view exists");
             var plotSr = plotGo.GetComponent<SpriteRenderer>();
             var expectedCropSprite = GeneratedSprites.Crop(crop.id, plot.crop.stage);
             Assert.IsNotNull(expectedCropSprite, $"generated sprite exists for {crop.id} stage {plot.crop.stage}");
             Assert.AreSame(expectedCropSprite, plotSr.sprite,
                 "plot renders the real generated crop sprite, not the placeholder square");
-            Debug.Log($"[P5Test] plot (10,10) shows generated sprite for {crop.id}@{plot.crop.stage}");
+            Debug.Log($"[P5Test] plot (16,16) shows generated sprite for {crop.id}@{plot.crop.stage}");
 
             var npc = _npcs.First(n => n.Def.region == "starlight_vale");
             var npcBody = npc.GetComponent<SpriteRenderer>();
@@ -89,8 +89,8 @@ namespace CosmicBloom.Tests
             var camGo = new GameObject("CaptureCam") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.orthographicSize = 8f;
-            cam.transform.position = new Vector3(13f, 11f, -10f);
+            cam.orthographicSize = 16f;   // whole 40x40 vale: plot at (16.5,16.5) + NPC ring r=14.4
+            cam.transform.position = new Vector3(20f, 20f, -10f);
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             yield return null;

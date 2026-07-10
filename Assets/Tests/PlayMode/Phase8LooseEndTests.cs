@@ -28,8 +28,8 @@ namespace CosmicBloom.Tests
             GameEvents.Clear();
             AnimalSpawner.ClearAll();
             var regions = new GameObject("TestRegions").AddComponent<RegionManager>();
-            regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(10, 10), new Vector3(20, 20)));
-            regions.RegisterRegion("sun_garden", new Bounds(new Vector3(60, 10), new Vector3(20, 20)));
+            regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(20, 20), new Vector3(40, 40)));
+            regions.RegisterRegion("sun_garden", new Bounds(new Vector3(100, 20), new Vector3(40, 40)));
             var state = NewState();
             state.Save.level = 10;
 

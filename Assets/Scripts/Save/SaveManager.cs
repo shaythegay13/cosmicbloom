@@ -36,9 +36,14 @@ namespace CosmicBloom.Save
 
             GameDatabase.LoadAll();
 
-            State = new GameState(LoadLocal());
+            var snapshot = LoadLocal();
+            bool migrated = SaveMigration.Apply(snapshot);   // P3-Phase 15 world resize
+            State = new GameState(snapshot);
             Farming = new FarmingSystem(State);
             State.OnDirty += () => _dirtyTimer = localDebounce;
+            // persist a migration immediately — worldVersion only exists on disk once
+            // written, and an unwritten migration would re-shift the keys next launch
+            if (migrated) WriteLocal();
 
             Farming.FastForward();   // apply time that passed while the app was closed
         }
@@ -98,6 +103,7 @@ namespace CosmicBloom.Save
         {
             if (server != null && server.schema == 2 && server.saveVersion > State.Save.saveVersion)
             {
+                SaveMigration.Apply(server);   // server may hold a pre-resize snapshot
                 State = new GameState(server);
                 Farming = new FarmingSystem(State);
                 State.OnDirty += () => _dirtyTimer = localDebounce;

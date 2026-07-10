@@ -2,6 +2,110 @@
 
 ---
 
+## P3-Phase 15 — region resize 20x20 → 40x40, structural only (2026-07-10)
+
+Per spec: bigger and correctly repopulated, NOT better-looking — decoration
+density/texture waits on the art-direction decision. Every number below is a
+2x linear scale of the original layout; nothing about the world's character
+changed, only its size.
+
+### Geometry (RegionWorldBuilder — single source for all of it)
+
+- `Size` 20 → **40**, `Spacing` 40 → **80** (keeps exactly one region-width of
+  travel-framing gap between regions; the five-region strip now spans x 0..360).
+- Tier rings scaled proportionally: outer wild ring edge 0..5 (was 0..2), mid
+  ring edge 6..11 (was 3..5, threshold now a named `MidMin` const), lush core
+  `LushMin..LushMax` = **12..27** (was 6..13) → **16x16 = 256 farmable plots
+  per region** (was 8x8 = 64). `FarmGrid`/`AmbientDecorationSpawner`/
+  `ToolService` all read these constants, so they scaled for free — FarmGrid
+  now instantiates 256 plot views per region with zero code change.
+- **DECISION: 40x40 is enough — no flag for larger.** 256 plots/region sits
+  comfortably under the server's 1000-plots-per-farm validateSnapshot cap and
+  the 300KB snapshot cap (5 fully-tilled regions ≈ 130KB); 4x the walkable
+  area already dwarfs the unchanged camera window (ortho 7 now frames ~1/3 of
+  a region instead of ~2/3); anything bigger just multiplies empty wild-ring
+  ground that the deferred visual-density pass would then have to fill.
+
+### Everything keyed to fixed coordinates, rescaled 2x
+
+- NPC ring radius 7.2 → **14.4** (`NpcController.Spawn`).
+- Animal paddock offsets → `(-10 + (i%6)*4, -13 + (i/6)*4)` from region center
+  (`AnimalSpawner.TrySpawnOne`) — still just below the lush core.
+- Landmark slots ×2 (`LandmarkSpawner.Slots`).
+- Explore targets ×2 (`ExploreTargets`): crystal_cave (16,-6),
+  crystal_cave_depths (16,-12), crash_site (-16,-6) from vale center.
+- Quest proximity radii scaled with the world (`QuestEngine.PollThresholdSteps`):
+  move_to 4 → **8**, explore 3 → **6** — same relative arrival tolerance.
+- `RegionManager.CurrentBounds` fallback now derives from
+  `RegionWorldBuilder.Size` instead of a literal 20.
+- Bounds-derived systems (player clamp, camera clamp, travel, PickupSpawner
+  scatter, NPC/animal spawn-by-bounds) needed no changes — they always read
+  registered bounds.
+
+### Save compatibility — SaveMigration (new, `Assets/Scripts/Save/SaveMigration.cs`)
+
+Old saves' plot keys live in the old 6..13 core, which is outside the new
+core — without migration their tilled/planted plots would silently lose their
+FarmPlot views. **DECISION (mechanical): additive `worldVersion` snapshot
+field + one-time key remap.** Checked `server/routes/game.js#validateSnapshot`
+first per CLAUDE.md: it pins `schema === 2`, caps coins/level/restoration/
+plot-count/size, and ignores unknown fields — so `worldVersion` is safe and
+`schema` stays 2. On `SaveManager` load paths (local Awake + ResolveWithServer),
+saves with `worldVersion < 1` get every plot key shifted **+6/+6** (old core
+6..13 maps exactly into new core 12..19 ⊂ 12..27), `hasPlayerPos` cleared
+(old world coords land in the resized gaps; center-spawn is fresh-save
+behavior), and `worldVersion` stamped. The migrated snapshot is written back
+to disk immediately — an unpersisted migration would re-shift keys next
+launch. Second `Apply` is a no-op (covered by test).
+
+### Tests
+
+- All hardcoded coordinates/bounds updated across 14 test files: fixture
+  bounds 20x20 → 40x40, region centers (10,10)/(50,10)/(90,10) →
+  (20,20)/(100,20)/(180,20), farmable cells moved into the new core (e.g.
+  plot taps at (7,7) → (16,16)), tier sample cells rescaled, overview capture
+  cams reframed for the 0..360 strip (pos (180,20), ortho 28).
+- `RegionWorldTests`' legacy-plot-key guard now asserts the *migrated* key
+  (10,10)+offset is farmable and that the unmigrated cell is not (migration
+  is required, not optional).
+- New `Phase15WorldResizeTests` (4 tests): ring-boundary math + 256-cell core,
+  FarmGrid populates 256 plot views, SaveMigration shifts once/drops player
+  pos/stamps worldVersion/never double-applies, fresh-snapshot no-op.
+
+### Verification (evidence files)
+
+- Headless compile: `Logs/phase15_compile.log` — 0 `error CS`.
+- Full regression, same METHOD-level nographics/render split:
+  `Logs/phase15_split_nographics.xml` **61/61 PASS** +
+  `Logs/phase15_split_nographics_b.xml` **1/1 PASS** (see pitfall below) +
+  `Logs/phase15_split_render.xml` **10/10 PASS** — **72/72 total** (68
+  pre-existing + 4 new).
+- Screenshots regenerated and eyeballed: `Logs/phase2_regions.png` (five
+  40x40 regions, scaled rings, one-region gaps), `Logs/phase5_sprites.png`
+  (full vale: 16x16 plot grid, NPC ring at r=14.4, landmarks at scaled
+  slots), `Logs/phase6_animals.png` (paddock spots below the core),
+  `Logs/phase9_landmarks.png`, `Logs/phase9_tiles.png`.
+
+### Two split-filter findings (operational, fixed here)
+
+1. **The 57-name nographics list used by Phase 9/10 had silently dropped
+   `Phase8LooseEndTests.SharedAnimal_OneProduceStreamAcrossRegions`** — the
+   58th test that phase8b's canonical filter contained. Restored it (it's
+   nographics-safe: passed in `phase8b_split_nographics.xml` and again now).
+   Canonical list going forward: `Logs/phase15_nographics_filter.txt`
+   (62 names, semicolon-joined, BOM-free).
+2. **PowerShell 5.1 `Set-Content -Encoding utf8` writes a UTF-8 BOM**, which
+   glued itself onto the first filter name — Unity silently matched zero
+   tests for that one name (61 ran instead of 62; caught by comparing filter
+   names against the XML's executed set). The dropped test was rerun solo
+   (`phase15_split_nographics_b.xml`, PASS) and the filter file is now
+   BOM-free.
+
+**P3-Phase 15: COMPLETE ✅** (structural resize only; visual density
+explicitly deferred to the art-direction decision.)
+
+---
+
 ## P3-Phase 10 — NPC art fix + scene ambiance (2026-07-10)
 
 Triggered by the user actually running the game after P3-Phase 9's art swap

@@ -30,7 +30,7 @@ namespace CosmicBloom.Tests
             _state = new GameState(new SaveSnapshot());
             _farming = new FarmingSystem(_state);
             _regions = new GameObject("TestRegions").AddComponent<RegionManager>();
-            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(10, 10), new Vector3(20, 20)));
+            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(20, 20), new Vector3(40, 40)));
             _player = PlayerController.Spawn(new Vector3(2, 2));
             _engine = new GameObject("TestQuestEngine").AddComponent<QuestEngine>();
             _engine.Bind(_state);

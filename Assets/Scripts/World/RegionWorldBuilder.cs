@@ -1,8 +1,9 @@
 // Cosmic Bloom — builds all five region tilemaps at runtime from regions.json.
-// Same tiered-ring layout for every region: 20x20 cells, outer wild ring
-// (tier 0), transitional ring (tier 1), inner 8x8 lush core (tier 2 — the
-// farmable area). Colors come from each region's groundTiers — nothing is
-// hardcoded per region. Regions sit 40 world units apart on X so they never
+// Same tiered-ring layout for every region: 40x40 cells (P3-Phase 15 resize,
+// 2x linear from the original 20x20), outer wild ring (tier 0), transitional
+// ring (tier 1), inner 16x16 lush core (tier 2 — the farmable area). Colors
+// come from each region's groundTiers — nothing is hardcoded per region.
+// Regions sit 80 world units apart on X (one region-width gap) so they never
 // overlap and there is room for travel framing.
 using System.Collections.Generic;
 using CosmicBloom.Data;
@@ -13,17 +14,18 @@ namespace CosmicBloom.World
 {
     public static class RegionWorldBuilder
     {
-        public const int Size = 20;          // cells per side
-        public const int Spacing = 40;       // world units between region origins
-        public const int LushMin = 6;        // inner core: cells 6..13 → 8x8 = 64 farmable plots
-        public const int LushMax = 13;
+        public const int Size = 40;          // cells per side
+        public const int Spacing = 80;       // world units between region origins
+        public const int LushMin = 12;       // inner core: cells 12..27 → 16x16 = 256 farmable plots
+        public const int LushMax = 27;
+        public const int MidMin = 6;         // transitional ring starts this far from the region edge
 
         /// <summary>Ground tier for a cell: 2 = lush core, 1 = mid ring, 0 = outer wild.</summary>
         public static int TierAt(int x, int y)
         {
             int edge = Mathf.Min(Mathf.Min(x, Size - 1 - x), Mathf.Min(y, Size - 1 - y));
             if (edge >= LushMin) return 2;
-            if (edge >= 3) return 1;
+            if (edge >= MidMin) return 1;
             return 0;
         }
 

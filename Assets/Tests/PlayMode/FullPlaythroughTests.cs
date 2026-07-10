@@ -35,7 +35,7 @@ namespace CosmicBloom.Tests
 
             // ── ACT: arrive (quest 1)
             UI.DialogueUI.Close();
-            player.transform.position = new Vector3(10, 10);
+            player.transform.position = new Vector3(20, 20);   // vale center after the 40x40 resize
             float t = Time.time + 3f;
             while (engine.IsActive("q_arrival") && Time.time < t) yield return null;
             Assert.IsTrue(engine.IsCompleted("q_arrival"), "arrived in the Vale");
@@ -70,7 +70,7 @@ namespace CosmicBloom.Tests
             Assert.IsTrue(RegionUnlockService.TryUnlock(state, "sun_garden"), "paid 1500c at Lv8");
             Assert.IsTrue(RegionUnlockService.TravelTo(state, "sun_garden"), "traveled");
             Assert.AreEqual("sun_garden", regions.CurrentRegionId);
-            Assert.AreEqual(new Vector3(50, 10, 0), player.transform.position, "standing in Sun Garden");
+            Assert.AreEqual(new Vector3(100, 20, 0), player.transform.position, "standing in Sun Garden");
 
             // ── REPEAT the loop in the new region with its own crop
             var sunCrop = System.Linq.Enumerable.First(GameDatabase.CropsFor("sun_garden"));
@@ -190,7 +190,7 @@ namespace CosmicBloom.Tests
 
             // ── q_arrival (1): cutscene + move_to starting_plot
             UI.DialogueUI.Close();
-            player.transform.position = new Vector3(10, 10);
+            player.transform.position = new Vector3(20, 20);   // vale center after the 40x40 resize
             yield return WaitWhileActive(engine, "q_arrival");
             Assert.IsTrue(engine.IsCompleted("q_arrival"));
             UI.DialogueUI.Close();

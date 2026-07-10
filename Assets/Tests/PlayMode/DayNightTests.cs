@@ -113,7 +113,7 @@ namespace CosmicBloom.Tests
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 10f;
-            cam.transform.position = new Vector3(10f, 10f, -10f);
+            cam.transform.position = new Vector3(20f, 20f, -10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             DayNightLighting.Assign2DRenderer(cam);   // Light2D needs the 2D renderer
 

@@ -63,7 +63,7 @@ namespace CosmicBloom.Tests
         [UnityTest]
         public IEnumerator Travel_MovesPlayerAndConfinesMovement()
         {
-            var player = PlayerController.Spawn(new Vector3(10, 10));
+            var player = PlayerController.Spawn(new Vector3(20, 20));
             yield return null;
 
             Assert.IsFalse(RegionUnlockService.TravelTo(_state, "moon_garden"), "locked region refuses travel");
@@ -72,11 +72,11 @@ namespace CosmicBloom.Tests
             RegionUnlockService.TryUnlock(_state, "moon_garden");
             Assert.IsTrue(RegionUnlockService.TravelTo(_state, "moon_garden"), "unlocked region travels");
             Assert.AreEqual("moon_garden", _regions.CurrentRegionId);
-            Assert.AreEqual(new Vector3(90, 10, 0), player.transform.position, "player at moon center");
+            Assert.AreEqual(new Vector3(180, 20, 0), player.transform.position, "player at moon center");
 
-            // movement now clamps INSIDE moon_garden (x 80..100), can't walk back to the vale
-            player.OnTapWorld(new Vector3(10, 10));
-            Assert.GreaterOrEqual(player.MoveTarget.Value.x, 80f,
+            // movement now clamps INSIDE moon_garden (x 160..200), can't walk back to the vale
+            player.OnTapWorld(new Vector3(20, 20));
+            Assert.GreaterOrEqual(player.MoveTarget.Value.x, 160f,
                 "tap toward the vale clamps to moon_garden's west edge");
             Debug.Log($"[P8Test] traveled to moon_garden; cross-region tap clamped to {player.MoveTarget}");
 

@@ -105,16 +105,16 @@ namespace CosmicBloom.Tests
             {
                 var tilemap = grids[def.id].GetComponentInChildren<Tilemap>();
                 AssertTile(tilemap, def, 0, 0, 0);     // outer ring
-                AssertTile(tilemap, def, 4, 4, 1);     // mid ring
-                AssertTile(tilemap, def, 10, 10, 2);   // lush core
+                AssertTile(tilemap, def, 8, 8, 1);     // mid ring
+                AssertTile(tilemap, def, 20, 20, 2);   // lush core
                 Debug.Log($"[P9Test] {def.id}: generated tile masks in place, tint still matches groundTiers");
             }
 
             var camGo = new GameObject("CaptureCam") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.transform.position = new Vector3(90f, 10f, -10f);
-            cam.orthographicSize = 14f;
+            cam.transform.position = new Vector3(180f, 20f, -10f);   // strip now spans x 0..360
+            cam.orthographicSize = 28f;
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             yield return null;
@@ -160,10 +160,10 @@ namespace CosmicBloom.Tests
             // gets its own single-crop coverage via Phase 5's GeneratedArtTests.
             var plants = new (string id, int x, int y)[]
             {
-                ("wheat", 9, 9),          // stalk
-                ("star_tomato", 11, 9),   // bush
-                ("carrot", 9, 11),        // root
-                ("clover_cover", 11, 11), // flower
+                ("wheat", 15, 15),          // stalk
+                ("star_tomato", 17, 15),    // bush
+                ("carrot", 15, 17),         // root
+                ("clover_cover", 17, 17),   // flower
             };
 
             var sprites = new List<Sprite>();
@@ -197,7 +197,7 @@ namespace CosmicBloom.Tests
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
             cam.orthographicSize = 4f;
-            cam.transform.position = new Vector3(10f, 10f, -10f);
+            cam.transform.position = new Vector3(16f, 16f, -10f);
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             yield return null;
@@ -256,8 +256,8 @@ namespace CosmicBloom.Tests
             var camGo = new GameObject("CaptureCam") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
-            cam.transform.position = new Vector3(90f, 10f, -10f);
-            cam.orthographicSize = 14f;
+            cam.transform.position = new Vector3(180f, 20f, -10f);   // strip now spans x 0..360
+            cam.orthographicSize = 28f;
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
             yield return null;

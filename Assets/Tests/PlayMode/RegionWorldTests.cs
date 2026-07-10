@@ -1,6 +1,7 @@
-// Phase 2 verification — all five regions build from regions.json with
-// correct per-tier colors, non-overlapping bounds, and a farmable lush core
-// that contains the pre-existing save's plot key (10,10).
+// Phase 2 verification (dimensions updated for the P3-Phase 15 resize to
+// 40x40) — all five regions build from regions.json with correct per-tier
+// colors, non-overlapping bounds, and a farmable lush core that contains the
+// pre-existing save's plot key (10,10) after SaveMigration's +6/+6 shift.
 // Also captures a PNG overview of all five tilemaps for visual review.
 using System.Collections;
 using System.IO;
@@ -50,8 +51,8 @@ namespace CosmicBloom.Tests
 
                 // Sample one cell per tier and compare against regions.json hex
                 AssertTileColor(tilemap, def, 0, 0, 0);     // outer ring
-                AssertTileColor(tilemap, def, 4, 4, 1);     // mid ring
-                AssertTileColor(tilemap, def, 10, 10, 2);   // lush core
+                AssertTileColor(tilemap, def, 8, 8, 1);     // mid ring
+                AssertTileColor(tilemap, def, 20, 20, 2);   // lush core
                 Debug.Log($"[P2Test] {def.id} tiers OK: {string.Join(",", def.groundTiers)}");
             }
         }
@@ -83,9 +84,13 @@ namespace CosmicBloom.Tests
                     Assert.IsFalse(all[i].b.Intersects(all[j].b),
                         $"{all[i].id} overlaps {all[j].id}");
 
-            // legacy save plot key "10,10" must sit in the farmable core
-            Assert.IsTrue(RegionWorldBuilder.IsFarmable(10, 10), "(10,10) stays farmable");
-            Assert.AreEqual(2, RegionWorldBuilder.TierAt(10, 10));
+            // legacy save plot key "10,10" survives via SaveMigration's +6/+6 shift:
+            // the migrated cell (16,16) must sit in the farmable core
+            int off = CosmicBloom.Save.SaveMigration.PlotCellOffset;
+            Assert.IsTrue(RegionWorldBuilder.IsFarmable(10 + off, 10 + off),
+                "migrated legacy plot key stays farmable");
+            Assert.IsFalse(RegionWorldBuilder.IsFarmable(10, 10),
+                "unmigrated legacy cell is outside the new core — migration is required");
         }
 
         [UnityTest]
@@ -97,9 +102,9 @@ namespace CosmicBloom.Tests
             var camGo = new GameObject("CaptureCam");
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
-            // five regions span x 0..180 (4*40+20); frame the strip with margin
-            cam.transform.position = new Vector3(90f, 10f, -10f);
-            cam.orthographicSize = 14f;
+            // five regions span x 0..360 (4*80+40); frame the strip with margin
+            cam.transform.position = new Vector3(180f, 20f, -10f);
+            cam.orthographicSize = 28f;
             cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 

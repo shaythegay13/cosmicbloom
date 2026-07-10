@@ -29,7 +29,7 @@ namespace CosmicBloom.Tests
             _state = new GameState(new SaveSnapshot());
             _farming = new FarmingSystem(_state);
             _regions = new GameObject("TestRegions").AddComponent<RegionManager>();
-            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(10, 10), new Vector3(20, 20)));
+            _regions.RegisterRegion("starlight_vale", new Bounds(new Vector3(20, 20), new Vector3(40, 40)));
             _player = PlayerController.Spawn(new Vector3(2, 2));   // far from center
             _engine = new GameObject("TestQuestEngine").AddComponent<QuestEngine>();
             _engine.Bind(_state);
@@ -54,7 +54,7 @@ namespace CosmicBloom.Tests
             Assert.AreEqual(1, _engine.StepIndex("q_arrival"), "cutscene step done");
 
             // step 1: move_to starting_plot — walk to the vale center, poll ticks at 1 Hz
-            _player.transform.position = new Vector3(10, 10);
+            _player.transform.position = new Vector3(20, 20);
             float deadline = Time.time + 3f;
             while (_engine.IsActive("q_arrival") && Time.time < deadline) yield return null;
 

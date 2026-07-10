@@ -29,8 +29,9 @@ namespace CosmicBloom.World
             var go = new GameObject($"Npc_{def.id}");
 
             // deterministic ring placement: mid-tier radius, evenly spaced
+            // (radius scaled 2x with the P3-Phase 15 region resize to 40x40)
             float angle = (Mathf.PI * 2f * index) / Mathf.Max(1, regionCount) + 0.4f;
-            const float radius = 7.2f;
+            const float radius = 14.4f;
             go.transform.position = regionCenter +
                 new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
 

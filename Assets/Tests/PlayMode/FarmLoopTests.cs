@@ -122,16 +122,16 @@ namespace CosmicBloom.Tests
 
             foreach (var kv in grids)
                 FarmGrid.Create(kv.Key, kv.Value, farming, state);
-            var player = PlayerController.Spawn(new Vector3(10, 10));
+            var player = PlayerController.Spawn(new Vector3(20, 20));
             yield return new WaitForFixedUpdate();   // colliders
 
-            // --- plot A in starlight_vale at cell (7,7) → world (7.5,7.5)
-            yield return DriveLoop(player, farming, state, new Vector3(7.5f, 7.5f), 7, 7, "starlight_vale");
+            // --- plot A in starlight_vale at cell (16,16) → world (16.5,16.5)
+            yield return DriveLoop(player, farming, state, new Vector3(16.5f, 16.5f), 16, 16, "starlight_vale");
 
-            // --- travel to sun_garden (region index 1 → origin x=40), plot B cell (8,8)
+            // --- travel to sun_garden (region index 1 → origin x=80), plot B cell (14,14)
             regions.SetCurrentRegion("sun_garden");
-            player.transform.position = new Vector3(50, 10);
-            yield return DriveLoop(player, farming, state, new Vector3(48.5f, 8.5f), 8, 8, "sun_garden");
+            player.transform.position = new Vector3(100, 20);
+            yield return DriveLoop(player, farming, state, new Vector3(94.5f, 14.5f), 14, 14, "sun_garden");
 
             Object.DestroyImmediate(player.gameObject);
             foreach (var kv in grids) Object.DestroyImmediate(kv.Value.gameObject);

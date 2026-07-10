@@ -500,17 +500,18 @@ namespace CosmicBloom.Core
                         if (World.ExploreTargets.TryGetPosition(step.target, out var targetPos))
                         {
                             var explorer = FindAnyObjectByType<World.PlayerController>();
-                            if (explorer != null && Vector2.Distance(explorer.transform.position, targetPos) < 3f)
+                            if (explorer != null && Vector2.Distance(explorer.transform.position, targetPos) < 6f)
                                 AdvanceStep(questId);
                         }
                         break;
 
                     case "move_to":
                         // sole data use: "starting_plot" — the lush core of the start region
+                        // (radius scaled 2x with the P3-Phase 15 region resize, as was explore's)
                         var player = FindAnyObjectByType<World.PlayerController>();
                         if (player != null && World.RegionManager.Instance != null &&
                             World.RegionManager.Instance.TryGetBounds("starlight_vale", out var b) &&
-                            Vector2.Distance(player.transform.position, b.center) < 4f)
+                            Vector2.Distance(player.transform.position, b.center) < 8f)
                             AdvanceStep(questId);
                         break;
                 }

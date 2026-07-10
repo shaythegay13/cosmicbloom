@@ -66,6 +66,8 @@ namespace CosmicBloom.Core
         public List<string> cosmeticsOwned = new();
         public List<string> heldItems = new();               // deliver-step quest items (e.g. sealed_crate)
         public Dictionary<string, FarmState> farms = new();
+        public int worldVersion;          // world-layout generation (additive field, schema stays 2);
+                                          // 0 = pre-resize 20x20 world — see Save.SaveMigration
 
         public string ToJson() => JsonConvert.SerializeObject(this);
         public static SaveSnapshot FromJson(string json) =>

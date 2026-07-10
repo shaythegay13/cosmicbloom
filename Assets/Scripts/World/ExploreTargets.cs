@@ -14,11 +14,12 @@ namespace CosmicBloom.World
     public static class ExploreTargets
     {
         // target id -> (home region, offset from that region's bounds center)
+        // (offsets scaled 2x with the P3-Phase 15 region resize to 40x40)
         static readonly Dictionary<string, (string region, Vector3 offset)> Targets = new()
         {
-            { "crystal_cave", ("starlight_vale", new Vector3(8f, -3f)) },
-            { "crystal_cave_depths", ("starlight_vale", new Vector3(8f, -6f)) },
-            { "crash_site", ("starlight_vale", new Vector3(-8f, -3f)) },
+            { "crystal_cave", ("starlight_vale", new Vector3(16f, -6f)) },
+            { "crystal_cave_depths", ("starlight_vale", new Vector3(16f, -12f)) },
+            { "crash_site", ("starlight_vale", new Vector3(-16f, -6f)) },
         };
 
         public static bool TryGetPosition(string target, out Vector3 position)
