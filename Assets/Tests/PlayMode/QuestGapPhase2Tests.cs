@@ -102,7 +102,7 @@ namespace CosmicBloom.Tests
             UI.DialogueUI.Close();
             yield return null;
 
-            var pickups = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            var pickups = Object.FindObjectsByType<PickupController>()
                 .Where(p => p.ItemId == "clan_journal").ToList();
             Assert.AreEqual(3, pickups.Count, "3 clan_journal pickups spawned for the collect step");
 
@@ -114,7 +114,7 @@ namespace CosmicBloom.Tests
 
             Assert.IsTrue(_engine.IsCompleted("q_journals"), "collecting all 3 completes q_journals");
             yield return null;   // Object.Destroy (PickupSpawner's reconcile) defers to end-of-frame
-            Assert.AreEqual(0, Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            Assert.AreEqual(0, Object.FindObjectsByType<PickupController>()
                 .Count(p => p.ItemId == "clan_journal"), "pickups despawned once collected");
             Debug.Log("[P2Test] q_journals completed via 3 real world pickups");
         }
@@ -126,7 +126,7 @@ namespace CosmicBloom.Tests
             UI.DialogueUI.Close();
             yield return null;
 
-            Assert.IsTrue(Object.FindObjectsByType<ExploreMarkerController>(FindObjectsSortMode.None).Length > 0,
+            Assert.IsTrue(Object.FindObjectsByType<ExploreMarkerController>().Length > 0,
                 "explore beacon spawned");
             Assert.IsTrue(ExploreTargets.TryGetPosition("crystal_cave", out var target));
             _player.transform.position = target;
@@ -134,10 +134,10 @@ namespace CosmicBloom.Tests
             float deadline = Time.time + 3f;
             while (_engine.StepIndex("q_lost_seed") == 0 && Time.time < deadline) yield return null;
             Assert.AreEqual(1, _engine.StepIndex("q_lost_seed"), "proximity poll advanced past explore");
-            Assert.AreEqual(0, Object.FindObjectsByType<ExploreMarkerController>(FindObjectsSortMode.None).Length,
+            Assert.AreEqual(0, Object.FindObjectsByType<ExploreMarkerController>().Length,
                 "beacon despawned once its step is done");
 
-            var seedPickup = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            var seedPickup = Object.FindObjectsByType<PickupController>()
                 .First(p => p.ItemId == "rare_seed");
             seedPickup.Interact(_player);
             UI.DialogueUI.Close();

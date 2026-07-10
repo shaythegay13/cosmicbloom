@@ -299,7 +299,7 @@ namespace CosmicBloom.Tests
             // ── q_journals (16): collect clan_journal x3
             PickupSpawner.Sync(state, regions, engine);
             yield return null;
-            var journals = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            var journals = Object.FindObjectsByType<PickupController>()
                 .Where(p => p.ItemId == "clan_journal").ToList();
             Assert.AreEqual(3, journals.Count);
             foreach (var j in journals) { j.Interact(player); UI.DialogueUI.Close(); }
@@ -311,7 +311,7 @@ namespace CosmicBloom.Tests
             yield return WaitWhileStepIs(engine, "q_lost_seed", 0);
             PickupSpawner.Sync(state, regions, engine);
             yield return null;
-            var seed = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            var seed = Object.FindObjectsByType<PickupController>()
                 .First(p => p.ItemId == "rare_seed");
             seed.Interact(player); UI.DialogueUI.Close();
             Assert.IsTrue(engine.IsCompleted("q_lost_seed"));
@@ -322,7 +322,7 @@ namespace CosmicBloom.Tests
             yield return WaitWhileStepIs(engine, "q_crystal_depths", 0);
             PickupSpawner.Sync(state, regions, engine);
             yield return null;
-            var shards = Object.FindObjectsByType<PickupController>(FindObjectsSortMode.None)
+            var shards = Object.FindObjectsByType<PickupController>()
                 .Where(p => p.ItemId == "prism_shard").ToList();
             Assert.AreEqual(3, shards.Count);
             foreach (var s in shards) { s.Interact(player); UI.DialogueUI.Close(); }

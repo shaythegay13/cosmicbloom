@@ -499,7 +499,7 @@ namespace CosmicBloom.Core
                     case "explore":
                         if (World.ExploreTargets.TryGetPosition(step.target, out var targetPos))
                         {
-                            var explorer = FindFirstObjectByType<World.PlayerController>();
+                            var explorer = FindAnyObjectByType<World.PlayerController>();
                             if (explorer != null && Vector2.Distance(explorer.transform.position, targetPos) < 3f)
                                 AdvanceStep(questId);
                         }
@@ -507,7 +507,7 @@ namespace CosmicBloom.Core
 
                     case "move_to":
                         // sole data use: "starting_plot" — the lush core of the start region
-                        var player = FindFirstObjectByType<World.PlayerController>();
+                        var player = FindAnyObjectByType<World.PlayerController>();
                         if (player != null && World.RegionManager.Instance != null &&
                             World.RegionManager.Instance.TryGetBounds("starlight_vale", out var b) &&
                             Vector2.Distance(player.transform.position, b.center) < 4f)

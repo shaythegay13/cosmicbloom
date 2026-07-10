@@ -27,7 +27,7 @@ namespace CosmicBloom.UI
                 scaler.referenceResolution = new Vector2(1080, 1920);   // portrait phone
                 scaler.matchWidthOrHeight = 0.5f;
 
-                if (Object.FindFirstObjectByType<EventSystem>() == null)
+                if (Object.FindAnyObjectByType<EventSystem>() == null)
                 {
                     var es = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
                     Object.DontDestroyOnLoad(es);

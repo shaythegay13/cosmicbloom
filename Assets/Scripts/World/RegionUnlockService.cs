@@ -46,7 +46,7 @@ namespace CosmicBloom.World
             if (regions == null || !regions.TryGetBounds(regionId, out var bounds)) return false;
 
             regions.SetCurrentRegion(regionId);
-            var player = Object.FindFirstObjectByType<PlayerController>();
+            var player = Object.FindAnyObjectByType<PlayerController>();
             if (player != null)
             {
                 player.CancelMove();

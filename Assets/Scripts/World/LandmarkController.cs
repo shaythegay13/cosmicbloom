@@ -130,7 +130,7 @@ namespace CosmicBloom.World
         /// there's no active deposit_seeds step or the pouch doesn't qualify yet.</summary>
         bool TryDepositSeeds()
         {
-            var quests = FindFirstObjectByType<QuestEngine>();
+            var quests = FindAnyObjectByType<QuestEngine>();
             if (quests == null) return false;
             if (!quests.HasActiveStepOfType("deposit_seeds")) return false;
 
