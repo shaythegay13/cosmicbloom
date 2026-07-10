@@ -2,7 +2,12 @@
 
 ---
 
-## P3-Phase 10 — Gemini-generated art replaces the procedural pipeline (2026-07-10)
+## P3-Phase 9 (continued) — Gemini-generated art replaces the procedural pipeline (2026-07-10)
+
+Continuation of P3-Phase 9's art-pipeline work below (2026-07-06) — same
+phase, not a new one: that entry extended the *procedural* generator to
+animals/tiles/landmarks; this one replaces the whole pipeline's output with
+real Gemini-generated art instead. Whatever comes next is Phase 10.
 
 **DECISION (content, user-approved): full replacement, not a toggle/fallback.**
 `GeneratedSprites`/`GeneratedSpriteImporter` are unchanged — every generated
@@ -133,7 +138,7 @@ retry for all 13.
   textures), `Logs/phase9_animals.png` (all 15 at proper scale),
   `Logs/phase9_tiles.png` / `phase9_landmarks.png` (per-region tint intact).
 
-**P3-Phase 10: COMPLETE ✅**
+**P3-Phase 9 (continued): COMPLETE ✅**
 
 ---
 
