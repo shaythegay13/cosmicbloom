@@ -2,6 +2,43 @@
 
 ---
 
+## Open item — maneuverability complaint, first written record (2026-07-10)
+
+The maneuverability complaint from Shay's playtest has never been logged in
+this file or any spec — it existed only in conversation, which is why three
+phases passed with zero progress on it. Logging what exists so it stops being
+invisible. **The complaint's own wording still isn't on file; this entry is
+the mechanical description of what movement currently IS, as the baseline for
+whenever Shay supplies the description or a recording of what feels wrong.**
+
+How movement works today (`PlayerController`/`CameraFollow`, unchanged since
+Phase 1 except for bounds values):
+- Tap-to-move only. No drag-steering, no virtual joystick, no hold-to-follow —
+  each tap sets one straight-line target (`Vector3.MoveTowards`).
+- Constant 4.5 u/s: no acceleration, no deceleration, instant direction
+  change, instant stop on arrival. No walk animation (single static frame).
+- No collision during movement — colliders exist only for tap-hit detection;
+  the player walks through NPCs, landmarks, and plots. No pathfinding
+  (nothing blocks, so nothing to path around).
+- Taps outside the region clamp to the region edge at target-set time.
+  A new tap replaces the current target; tapping an interactable out of range
+  walks over and interacts on arrival (1.4u range).
+- Camera: SmoothDamp follow, 0.18s smoothing, clamped inside region bounds,
+  ortho 7 (~14 world-units visible vertically).
+- **Phase 15 made whatever the complaint is 2x more exposed**: regions are now
+  40 units across at the same 4.5 u/s — ~8.9s edge-to-edge, ~4.4s center-to-
+  edge (was ~4.4s/~2.2s). Speed-to-world-size ratio halved; if the complaint
+  was travel tedium, it's worse now; if it was precision/responsiveness, it's
+  unchanged.
+
+Needed to act: Shay's actual description or a screen recording of play (feel
+at 1x timescale is explicitly a human-side check — same category as the two
+never-done items in P3-Phase 8 §4). Candidate fixes differ completely
+depending on which complaint it is (speed constant / drag-to-move input mode /
+camera smoothing / collision expectations), so no fix is attempted blind.
+
+---
+
 ## P3-Phase 15 — region resize 20x20 → 40x40, structural only (2026-07-10)
 
 Per spec: bigger and correctly repopulated, NOT better-looking — decoration
