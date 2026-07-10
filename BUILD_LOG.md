@@ -2,6 +2,44 @@
 
 ---
 
+## Player-character sprite — procedural stopgap (2026-07-10)
+
+Direct answer to a direct question: the player was NOT in the 150-sprite
+Gemini batch (50 NPCs + 50 crops + 15 animals + 15 tiles + 14 landmark
+states — no player category ever existed). The player has been the teal
+`ProceduralSprites.Capsule()` placeholder since Phase 1. Per user instruction
+(no AI Studio credits available), generated a stopgap from the original
+procedural pipeline — explicitly NOT final art, just "not a blob" until
+Gemini credits are restored, at which point `player` regenerates through the
+same batch flow as every other category.
+
+- `Tools/art/build-cosmic.mjs`: new `buildPlayer()` — `characterSprite` with
+  the placeholder's own teal (#7dd8c8) as outfit, same palette→adapter
+  mapping as `buildNpcs`. Output: `Sprites/Generated/Player/player.png`
+  (64x64, one frame, `down` pose — same single-frame convention as NPCs).
+- **Safety change to the script (mechanical DECISION):** category args are
+  now REQUIRED (`node build-cosmic.mjs player`); a no-arg run prints usage
+  and exits 1 **without writing anything**. Since the Gemini swap, every
+  category folder holds curated art under the exact filenames this script
+  emits — the old regenerate-everything default would have silently
+  overwritten all 150 Gemini PNGs. Verified: no-arg run refuses, Npcs/
+  folder untouched.
+- Wiring, same pattern as every category: `GeneratedSprites.Player()`
+  (null-safe Resources load), `GeneratedSpriteImporter` treats `Player/` as
+  character art (bottom pivot 0.5/0.06, PPU 64), `PlayerController.Spawn`
+  uses the generated sprite untinted with the teal capsule as automatic
+  fallback (missing file → old behavior, no code change needed to revert).
+- Verification: `Logs/playerart_compile.log` 0 `error CS`;
+  full regression `Logs/playerart_split_nographics.xml` **62/62** (BOM-free
+  filter — all names matched in one run this time) +
+  `Logs/playerart_split_render.xml` **10/10** = **72/72**; player assertion
+  added inside `GeneratedArtTests.FarmPlotAndNpc_ShowGeneratedSprites_Screenshot`
+  (AreSame generated sprite, untinted) and the refreshed
+  `Logs/phase5_sprites.png` shows the full-body teal gardener standing in
+  the vale's plot grid.
+
+---
+
 ## Open item — maneuverability complaint, first written record (2026-07-10)
 
 The maneuverability complaint from Shay's playtest has never been logged in

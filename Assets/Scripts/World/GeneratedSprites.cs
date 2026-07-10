@@ -15,6 +15,7 @@ namespace CosmicBloom.World
         const string AnimalsRoot = "Sprites/Generated/Animals/";
         const string TilesRoot = "Sprites/Generated/Tiles/";
         const string LandmarksRoot = "Sprites/Generated/Landmarks/";
+        const string PlayerRoot = "Sprites/Generated/Player/";
 
         static readonly Dictionary<string, Sprite> _cache = new();
 
@@ -34,6 +35,9 @@ namespace CosmicBloom.World
         /// <summary>Generated sprite for a landmark in its ruined or restored state, or null if not generated.</summary>
         public static Sprite Landmark(string landmarkId, bool restored) =>
             Load($"{LandmarksRoot}{landmarkId}_{(restored ? "restored" : "ruined")}");
+
+        /// <summary>Generated player-character sprite, or null if not generated.</summary>
+        public static Sprite Player() => Load($"{PlayerRoot}player");
 
         static Sprite Load(string resourcePath)
         {

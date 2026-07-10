@@ -5,7 +5,12 @@
 // own GameData JSON. No atlases, no build.mjs coupling — one PNG per frame,
 // loaded at runtime by Assets/Resources/Sprites/Generated/.
 //
-// Usage:  node Tools/art/build-cosmic.mjs
+// Usage:  node Tools/art/build-cosmic.mjs <category...>
+//         categories: crops npcs animals tiles landmarks player
+// Categories are REQUIRED since the 2026-07-10 Gemini art swap: every
+// category folder now holds curated Gemini-generated PNGs under these same
+// filenames, so an unqualified run would silently overwrite all of them with
+// procedural output. Name exactly the categories you intend to regenerate.
 // Needs @napi-rs/canvas resolvable (see README note below / CLAUDE.md).
 import { createCanvas } from '@napi-rs/canvas';
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
@@ -28,6 +33,7 @@ const NPCS_OUT = join(OUT_ROOT, 'Npcs');
 const ANIMALS_OUT = join(OUT_ROOT, 'Animals');
 const TILES_OUT = join(OUT_ROOT, 'Tiles');
 const LANDMARKS_OUT = join(OUT_ROOT, 'Landmarks');
+const PLAYER_OUT = join(OUT_ROOT, 'Player');
 
 // animals.json has no body-plan field, so (same pattern as
 // AnimalSpawner.ExclusiveRegionByAnimal) this is a code-side table mapping
@@ -168,10 +174,40 @@ function buildLandmarks() {
     console.log(`landmarks: ${seen.size} landmarks x 2 states = ${count} frames written to ${LANDMARKS_OUT}`);
 }
 
+// Player has no GameData entry — the "teal cosmic gardener" placeholder color
+// (PlayerController's Capsule tint, #7dd8c8) becomes the outfit, same
+// palette-to-adapter mapping buildNpcs uses. Stopgap until Gemini credits are
+// restored; one sprite, same 64x64/bottom-pivot conventions as NPCs.
+function buildPlayer() {
+    mkdirSync(PLAYER_OUT, { recursive: true });
+    const body = '#7dd8c8';
+    const px = characterSprite({
+        skin: shade(body, 0.35),
+        hair: '#355e54',
+        outfit: body,
+        hat: 'none',
+    }, 'down', 0);
+    writePng(px, join(PLAYER_OUT, 'player.png'));
+    console.log(`player: 1 sprite written to ${PLAYER_OUT}`);
+}
+
+const BUILDERS = {
+    crops: buildCrops,
+    npcs: buildNpcs,
+    animals: buildAnimals,
+    tiles: buildTiles,
+    landmarks: buildLandmarks,
+    player: buildPlayer,
+};
+
+const requested = process.argv.slice(2).map(a => a.toLowerCase());
+if (requested.length === 0 || requested.some(c => !BUILDERS[c])) {
+    console.error(`Usage: node build-cosmic.mjs <category...>   (${Object.keys(BUILDERS).join(' ')})`);
+    console.error('Categories are required: category folders hold curated Gemini art under');
+    console.error('these same filenames — an unqualified run would overwrite ALL of it.');
+    process.exit(1);
+}
+
 const t0 = Date.now();
-buildCrops();
-buildNpcs();
-buildAnimals();
-buildTiles();
-buildLandmarks();
+for (const c of requested) BUILDERS[c]();
 console.log(`done in ${Date.now() - t0}ms`);

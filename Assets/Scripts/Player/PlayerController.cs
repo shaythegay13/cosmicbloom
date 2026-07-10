@@ -108,14 +108,19 @@ namespace CosmicBloom.World
         bool InRange(IInteractable target) =>
             Vector2.Distance(transform.position, target.InteractPosition) <= interactRange;
 
-        /// <summary>Spawn the player with its placeholder sprite. Used by GameBootstrap and tests.</summary>
+        /// <summary>Spawn the player. Used by GameBootstrap and tests.
+        /// Same real-art/fallback pattern as NpcController: the generated
+        /// character sprite if it loaded, else the tinted placeholder capsule.</summary>
         public static PlayerController Spawn(Vector3 position)
         {
             var go = new GameObject("Player");
             go.transform.position = position;
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = ProceduralSprites.Capsule();
-            sr.color = new Color32(0x7d, 0xd8, 0xc8, 0xff);   // teal cosmic-gardener placeholder
+            var generated = GeneratedSprites.Player();
+            sr.sprite = generated != null ? generated : ProceduralSprites.Capsule();
+            sr.color = generated != null
+                ? Color.white                                  // art carries its own palette
+                : new Color32(0x7d, 0xd8, 0xc8, 0xff);         // teal cosmic-gardener placeholder
             sr.sortingOrder = 10;
             var mat = ProceduralSprites.LitMaterial;
             if (mat != null) sr.sharedMaterial = mat;   // 2D-lit so day/night lighting applies

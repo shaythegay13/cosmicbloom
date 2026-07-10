@@ -86,6 +86,17 @@ namespace CosmicBloom.Tests
             Assert.IsNull(npc.transform.Find("Accent"), "generated-art NPCs skip the placeholder accent chip");
             Debug.Log($"[P5Test] npc {npc.Def.id} shows generated sprite");
 
+            // Player (P3 stopgap, 2026-07-10): procedural full-body character from
+            // the same pipeline, wired via the same real-art/fallback pattern.
+            var player = PlayerController.Spawn(new Vector3(20f, 14f, 0f));
+            var playerSr = player.GetComponent<SpriteRenderer>();
+            var expectedPlayerSprite = GeneratedSprites.Player();
+            Assert.IsNotNull(expectedPlayerSprite, "generated player sprite exists");
+            Assert.AreSame(expectedPlayerSprite, playerSr.sprite,
+                "player renders the generated character sprite, not the placeholder capsule");
+            Assert.AreEqual(Color.white, playerSr.color, "generated player sprite is untinted");
+            Debug.Log("[P5Test] player shows generated sprite");
+
             var camGo = new GameObject("CaptureCam") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true;
@@ -108,6 +119,7 @@ namespace CosmicBloom.Tests
             File.WriteAllBytes(Path.Combine(Application.dataPath, "..", "Logs", "phase5_sprites.png"), tex.EncodeToPNG());
             Debug.Log("[P5Test] captured Logs/phase5_sprites.png");
 
+            Object.DestroyImmediate(player.gameObject);
             Object.DestroyImmediate(camGo);
         }
     }

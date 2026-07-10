@@ -20,6 +20,7 @@ public class GeneratedSpriteImporter : AssetPostprocessor
     const string GeneratedRoot = "Assets/Resources/Sprites/Generated/";
     const string NpcsRoot = "Assets/Resources/Sprites/Generated/Npcs/";
     const string AnimalsRoot = "Assets/Resources/Sprites/Generated/Animals/";
+    const string PlayerRoot = "Assets/Resources/Sprites/Generated/Player/";
     const float Ppu = 64f;
 
     void OnPreprocessTexture()
@@ -41,7 +42,7 @@ public class GeneratedSpriteImporter : AssetPostprocessor
         // feet sit right at the bottom edge of the 32px canvas, so a bottom
         // pivot grounds them at the spawn point the same way the old
         // near-bottom-pivoted Capsule (0.5, 0.15) / Critter (0.5, 0.1) did.
-        bool isNpc = path.Contains(NpcsRoot);
+        bool isNpc = path.Contains(NpcsRoot) || path.Contains(PlayerRoot);   // player = character art, same feet-at-bottom framing
         bool isAnimal = path.Contains(AnimalsRoot);
         var pivot = isNpc ? new Vector2(0.5f, 0.06f) : isAnimal ? new Vector2(0.5f, 0.1f) : new Vector2(0.5f, 0.5f);
         importer.spritePivot = pivot;
