@@ -2,6 +2,141 @@
 
 ---
 
+## P3-Phase 10 — Gemini-generated art replaces the procedural pipeline (2026-07-10)
+
+**DECISION (content, user-approved): full replacement, not a toggle/fallback.**
+`GeneratedSprites`/`GeneratedSpriteImporter` are unchanged — every generated
+sprite still lands in `Assets/Resources/Sprites/Generated/<Category>/` under
+the exact same filenames, so the procedural code path (`Tools/art/build-cosmic.mjs`,
+`ProceduralSprites`) still exists as a dead-file-missing fallback, but no
+procedural PNG remains on disk in any category: all 150 sprites (50 NPCs, 50
+crops — see crop-count decision below, 15 animals, 15 ground tiles, 14
+landmark states) are now real Gemini-generated art, background-processed to
+match the existing 64×64/PPU-64 convention. Zero C# changes.
+
+### Crop roster expanded 26 → 50 (10 per region), before art
+
+User call: 5 crops/region wasn't enough for a game about farming. Added 24
+crops across the existing 5 regions' economic tiers (seed/sell/grow-time
+scaling unchanged, archetypes: stalk/bush/root/vine/flower same as before) —
+full per-crop economics in `Assets/Resources/GameData/crops.json`. Verified
+50/50, 10-per-region, zero duplicate ids, clean headless compile
+(`Logs/crops50_compile.log`) before touching art.
+
+### `Tools/art/gemini-batch.mjs` — Gemini API generation (built pre-session, used this phase)
+
+Automates what was previously 49 manual copy-paste prompts into the Google
+AI Studio web UI: one job per NPC/crop/animal/tile/landmark, `gemini-3.1-flash-image`
+via `@google/genai`, resumable (skips existing output), retry/backoff,
+failures logged to `gemini-failures.log`. Credential handled via a local
+gitignored `Tools/art/.env` (Claude Code's classifier blocks raw API keys on
+a Bash command line — this is the sanctioned workaround, **never put the key
+inline again**). Session total spend: **~$9-10** of the user's self-imposed
+$15 cap (regenerating 13 defective crops this phase cost ~$0.65-0.90 more).
+
+### `Tools/art/process-gemini-art.mjs` — new post-processing pipeline (this phase, the bulk of the work)
+
+Raw Gemini renders come back at ~900-1400px, inconsistent/solid backgrounds,
+and (crops) all growth stages in one wide strip — none of that matches what
+`GeneratedSpriteImporter.cs` expects (64×64, transparent, one file per crop
+stage). This script normalizes all of it with **zero Unity/C# changes**, output
+staged in gitignored `Tools/art/gemini-processed/` then copied over
+`Assets/Resources/Sprites/Generated/`. Getting the background-removal step
+robust took several iterations — each one a real bug found via spot-checking
+contact sheets, not guessed in advance:
+
+1. **Fixed 4-corner color match** (first attempt) — failed on any image
+   whose corners weren't all the same color (e.g. a soft vignette).
+2. **Chained/relative flood-fill** (compare each pixel to whichever neighbor
+   reached it) — handles gradients, but a **DFS via stack** let the
+   comparison color drift far from a pixel's true local neighborhood along a
+   long snaking path, causing spurious rejections; switching to a **BFS via
+   an index-based queue** fixed that (shell-by-shell expansion keeps the
+   comparison local).
+3. **Speckled/marbled backgrounds** (adjacent pixels jump 50+ units) still
+   defeated per-step tolerance. Fix: sample the *entire border* (not just 4
+   corners) into a deduped color palette, flood-fill matching against the
+   whole palette. This also required a **frequency filter** (a color must
+   cover ≥2% of the border to count as background) — otherwise a shoulder/hat
+   brim incidentally touching the frame edge got folded into the palette and
+   then erased the character everywhere else that color appeared.
+4. **Nested picture-frame compositions** (a handful of NPC portraits have a
+   decorative border strip in a different color from the actual background
+   behind the subject) — a single frontier pass only clears the outer frame.
+   Fixed by treating the newly-exposed inner boundary as a new frontier and
+   repeating ("onion-peeling"), bounded by a **plausibility cap**
+   (`MAX_CLEARED_FRACTION`) that snapshots-and-rolls-back an iteration that
+   clears an implausible fraction in one jump (the signal that a peel broke
+   into the subject itself, e.g. `sirius.png`'s fur) — **this cap had to be
+   different for crops vs. portraits**: a portrait's background tops out
+   around 60-70%, but a crop growth-strip's tiny early sprouts on a mostly-empty
+   canvas legitimately clear ~90%+ in one pass; using the portrait threshold
+   there wrongly rolled back correct results (`heartseed.png`).
+5. **Transparent-pixel palette corruption**: once TRANSPARENT_RULE started
+   working reliably, `buildFrontierPalette` was still reading RGB off
+   already-transparent frontier pixels (meaningless leftover values) and
+   polluting the palette with noise, causing unpredictable erosion on
+   otherwise-clean transparent sources. Fixed by skipping alpha≤10 pixels
+   when building the palette.
+6. **Dark backgrounds near outline-black**: one background (`shade_ginger`)
+   came back near-black (~20-30/channel), close enough to the pixel-art
+   style's near-black outline strokes that the fixed tolerance (42) let the
+   fill leak through outlines in spots. Tolerance is now **adaptive to the
+   palette's own lightness** (`toleranceForPalette`) — tight for dark
+   backgrounds, the old 42 ceiling for light ones.
+7. **Genuine per-pixel noise/grain**: some renders have real grain in the
+   background (no small color palette can match true per-pixel randomness),
+   surviving as dozens of tiny islands that fragment and bridge the real
+   crop-stage blobs together. Gap-based merging chained right through the
+   noise into garbage; switched crop segmentation to **keep the `stages`
+   largest connected components by pixel count, discard everything smaller**
+   — real stages are unambiguously bigger than a noise speck.
+
+Crop-specific segmentation (multi-stage strips, not single subjects):
+connectivity-based (not equal-width columns — sprawling vine/bush archetypes
+space stages too unevenly for that), each stage scaled with a **floor-based
+size progression** (`CROP_MIN_STAGE_FRAC=0.30`) so the tiniest sprout stays
+visible instead of the literal (near-invisible) proportion its raw pixel
+height would give it, all sharing one baseline/scale so growth still reads
+as growth. A small uniform bbox pad (`PANEL_PAD=10`) guards against a
+tight-connectivity bbox clipping fine details (a heart-bloom's top notch,
+separated from its stem by a single anti-aliased gap, otherwise came out as
+its own tiny dropped fragment).
+
+**13 crops needed source regeneration** (`gemini-batch.mjs --force --id`),
+not just better post-processing — genuine generation defects: a
+semi-transparent smoke/cloud overlay baked into the pixel data
+(`blaze_melon`), garbled/incoherent shapes. Regenerated cleanly on the first
+retry for all 13.
+
+### Known accepted limitations (flagged, not chased further — diminishing returns)
+
+- `sirius.png` (NPC): background-removal safety rollback correctly refuses to
+  erase the subject, but leaves this one NPC with a solid dark card behind it
+  instead of transparency. 1 of 50 NPCs.
+- `heartseed_5` (the finale crop's climactic stage): the heart-bloom's very
+  tip still clips by a hair even after the bbox pad. Cosmetic only.
+- `driftberry_3`, `starlight_berry_3` etc. flagged by an automated
+  >85%-opaque heuristic during review — confirmed by eye to be legitimate
+  (a bush archetype's mature stage genuinely fills most of the frame), not
+  bugs.
+
+### Verification
+
+- Headless compile: `Logs/art_import_compile.log` — 0 `error CS`, clean exit.
+- PlayMode regression, same split filters reused verbatim from Phase 9b
+  (`Logs/phase9b_split_nographics.xml` fullnames, `phase9b_split_render_names.txt`),
+  not rebuilt: nographics `Logs/art_replace_nographics.xml` **57/57 PASS**,
+  render/screenshot `Logs/art_replace_render.xml` **10/10 PASS**. **Total: 67/67.**
+- Visual confirmation in actual test screenshots (not just assertions):
+  `Logs/phase9_crops_mature.png` (crops sitting correctly on the new tile
+  textures), `Logs/phase9_animals.png` (all 15 at proper scale),
+  `Logs/phase9_tiles.png` / `phase9_landmarks.png` (per-region tint intact).
+
+**P3-Phase 10: COMPLETE ✅**
+
+---
+
 ## P3-Phase 8 — Close the open loose ends (2026-07-09 ~23:45)
 
 Ran after P3-Phase 9 (which went deliberately ahead — see its own header note).

@@ -114,3 +114,8 @@ InitTestScene*.unity*
 /Tools/art/gemini-out/
 /Tools/art/gemini-ref/
 /Tools/art/gemini-failures.log
+/Tools/art/.env
+
+# Post-processed staging output (Tools/art/process-gemini-art.mjs) — the
+# reviewed, final versions are copied into Assets/Resources/Sprites/Generated/
+/Tools/art/gemini-processed/
