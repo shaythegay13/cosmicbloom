@@ -2,6 +2,102 @@
 
 ---
 
+## P3-Phase 10 — NPC art fix + scene ambiance (2026-07-10)
+
+Triggered by the user actually running the game after P3-Phase 9's art swap
+and screenshotting real problems the automated test suite doesn't catch
+(tests assert sprites load/differ, not that they're framed correctly or that
+the world doesn't look inert). Investigated each complaint against the actual
+code before changing anything — see that investigation's findings below,
+since some turned out to be real regressions and some were pre-existing,
+unrelated behavior.
+
+### 1. NPCs were bust/portrait art on a full-body-shaped rig — real regression, fixed
+
+`NpcController.Spawn()` uses the generated NPC sprite as the *entire body*,
+bottom-anchored (`GeneratedSpriteImporter.cs` pivots NPCs at (0.5, 0.06)
+specifically because, per its own comment, "the character/critter art's feet
+sit right at the bottom edge of the canvas"). `Tools/art/gemini-batch.mjs`'s
+NPC prompt asked for "ONE character portrait" — Gemini correctly generated
+head-and-shoulders portraits, which is the wrong shape entirely for a
+bottom-pivoted overworld sprite: feet-anchoring a bust produces a floating
+head. Fixed the prompt to explicitly demand full-body standing framing (head
+to feet, front-facing idle pose, "NOT a portrait or dialogue-box bust") and
+regenerated all 50.
+
+**47/50 came back clean** (verified via full-body contact sheet). **3
+(`nimbus`, `pyra`, `zyx`) have residual cosmetic issues** — a background not
+fully cleared, some content erosion, and stray noise, respectively — from
+pipeline edge cases, not the generation itself (their raw sources are clean).
+Regeneration attempts on all three failed: the Google AI Studio account's
+prepayment credits ran out mid-session (`429 prepayment credits are
+depleted`). **User call: skip these 3 for now, revisit only if they read as
+more than cosmetic during actual play.** All three are still correctly
+full-body (not busts) — the residual issue is background/noise cosmetics, not
+the framing bug.
+
+### 2. Farm-plot tiles read as a flat hardcoded green square — real, but pre-existing, not fixed this phase
+
+`FarmPlot.cs` draws every one of the 64 farmable tiles with its own
+`SpriteRenderer` using `ProceduralSprites.Square` tinted by hardcoded
+`EmptyColor`/`TilledColor` constants — this has never used any generated art,
+in any phase, and sits above the tilemap (sorting order 5 vs. the ground's
+0). The tilemap underneath *is* correctly wired to the new tile art
+(confirmed in `RegionWorldBuilder.cs`), but the plot overlay's semi-transparent
+tint flattens it into what reads as a solid color block. **Not addressed this
+phase** — flagged as a real gap, scoped separately from the ambiance work
+below.
+
+### 3. Landmarks/NPCs "look placed, do nothing" — they work, just weren't advertised as interactive
+
+`LandmarkController.Interact()` already has real behavior (restore for
+coins; fishing/seed-deposit unlocks once restored) — confirmed by reading the
+code, nothing was broken. The complaint was pure discoverability: no visual
+cue signals these are tappable. Added `InteractionCue.cs` — a small pulsing
+dot (reused `ProceduralSprites.Square`, no new art needed) attached above
+NPCs (always, cream) and landmarks (gold while unrestored, cyan if restoring
+unlocked a repeatable action like fishing/deposit, hidden once it's just
+flavor text with nothing left to do).
+
+### 4. Farm actions had no visual payoff — added `FarmActionEffects.cs`
+
+Till/water/harvest silently changed a tile's color with no feedback that the
+action landed. Added a small particle burst per action (till: brown dust,
+water: blue droplets with gravity, harvest: gold sparkles that float
+upward), hooked into `FarmingSystem.OnAction` (`FarmPlot.OnFarmAction` already
+subscribed to this for its own visual refresh — added the effect spawn call
+right alongside it). Procedural, not generated art — a sub-second particle
+burst doesn't need illustrated detail, and this needed zero API spend right
+as the account ran dry.
+
+### 5. Wild/transitional ground read as flat empty color — added `AmbientDecorationSpawner.cs`
+
+Added two new `ProceduralSprites` shapes (`Rock`, `Tuft`) and a spawner that
+scatters them across each region's non-farmable tiers (0/1) — deterministic
+per region (seeded RNG, not Unity's global state) so the layout doesn't
+reshuffle between sessions, tinted from the region's own `groundTiers[0]`
+color darkened so it reads as a distinct prop rather than clashing. Hooked
+into `RegionWorldBuilder.BuildAll()` right after each region's tilemap
+builds. Procedural for the same reason as #4 — this is incidental dressing,
+not core content, and didn't justify (or have budget for) new AI art.
+
+### Verification
+
+- Headless compile: `Logs/ambiance_compile.log` — 0 `error CS`.
+- Same two PlayMode split filters reused verbatim (nographics fullnames,
+  `phase9b_split_render_names.txt`): `Logs/ambiance_nographics.xml` **57/57
+  PASS**, `Logs/ambiance_render.xml` **10/10 PASS**. **Total: 67/67.**
+- Visual confirmation via fresh test screenshots: `Logs/phase9_landmarks.png`
+  zoomed shows the gold interaction cue pulsing above a landmark and rock
+  decorations scattered through the outer/transitional ring exactly as
+  intended.
+
+**P3-Phase 10: COMPLETE ✅** (items 1/3/4/5 addressed; item 2 — farm-plot
+tile art — explicitly deferred, not forgotten, tracked here for whenever it's
+picked up.)
+
+---
+
 ## P3-Phase 9 (continued) — Gemini-generated art replaces the procedural pipeline (2026-07-10)
 
 Continuation of P3-Phase 9's art-pipeline work below (2026-07-06) — same

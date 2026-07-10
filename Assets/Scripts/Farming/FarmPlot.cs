@@ -68,7 +68,9 @@ namespace CosmicBloom.Farming
 
         void OnFarmAction(string action, int x, int y)
         {
-            if (x == gridX && y == gridY) RefreshVisual();
+            if (x != gridX || y != gridY) return;
+            RefreshVisual();
+            FarmActionEffects.Spawn(action, transform.position);
         }
 
         void LateUpdate() => RefreshVisual();   // growth advances via FastForward timers

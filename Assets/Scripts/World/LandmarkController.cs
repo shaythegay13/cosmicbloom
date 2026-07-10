@@ -22,8 +22,11 @@ namespace CosmicBloom.World
 
         GameState _state;
         SpriteRenderer _sr;
+        InteractionCue _cue;
 
         static readonly Color RuinedColor = new Color(0.35f, 0.32f, 0.30f, 1f);
+        static readonly Color NeedsRestoreCueColor = new Color(1f, 0.85f, 0.35f, 1f);   // gold: "restore me"
+        static readonly Color RepeatableCueColor = new Color(0.5f, 0.95f, 1f, 1f);      // cyan: "still tap me" (fishing/deposit)
 
         public bool Restored =>
             _state != null && _state.FarmFor(RegionId).landmarksRestored.Contains(Def.id);
@@ -49,6 +52,7 @@ namespace CosmicBloom.World
             lm.RegionId = regionId;
             lm._state = state;
             lm._sr = sr;
+            lm._cue = InteractionCue.Attach(go, NeedsRestoreCueColor, yOffset: 0.55f, scale: 0.22f);
             lm.RefreshVisual();
             return lm;
         }
@@ -68,6 +72,14 @@ namespace CosmicBloom.World
             _sr.color = usingGenerated
                 ? Color.white
                 : (restored ? new Color(0.55f, 0.95f, 0.85f, 1f) : RuinedColor);
+
+            // Cue: gold while it still needs restoring, cyan if restoring unlocked a
+            // repeatable action (fishing/deposit), hidden once it's just flavor text.
+            if (_cue == null) return;
+            bool repeatable = Def.unlocks == "fishing" || Def.unlocks == "lore_journal_2";
+            _cue.SetVisible(!restored || repeatable);
+            if (!restored) _cue.SetColor(NeedsRestoreCueColor);
+            else if (repeatable) _cue.SetColor(RepeatableCueColor);
         }
 
         public void Interact(PlayerController player)

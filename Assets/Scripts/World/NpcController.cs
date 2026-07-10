@@ -15,6 +15,7 @@ namespace CosmicBloom.World
         bool _subscribed;
         GameState _state;
         static readonly System.Collections.Generic.HashSet<string> _metFallback = new();
+        static readonly Color CueColor = new Color(1f, 0.95f, 0.7f, 1f);   // warm "someone to meet" cream
 
         public Vector3 InteractPosition => transform.position;
 
@@ -72,6 +73,7 @@ namespace CosmicBloom.World
             npc.Def = def;
             npc._body = body;
             npc._state = state;
+            InteractionCue.Attach(go, CueColor);
             npc.ApplyTimeOfDay();
             return npc;
         }

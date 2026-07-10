@@ -42,8 +42,10 @@ namespace CosmicBloom.World
             for (int i = 0; i < GameDatabase.Regions.Count; i++)
             {
                 var def = GameDatabase.Regions[i];
-                var grid = Build(def, OriginOf(i), mat);
+                var origin = OriginOf(i);
+                var grid = Build(def, origin, mat);
                 result[def.id] = grid;
+                AmbientDecorationSpawner.SpawnForRegion(def, origin, i, grid.transform);
 
                 var min = grid.transform.position;
                 var bounds = new Bounds(min + new Vector3(Size / 2f, Size / 2f), new Vector3(Size, Size));

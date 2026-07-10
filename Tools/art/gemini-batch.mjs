@@ -6,7 +6,9 @@
 //
 // Setup:
 //   npm install                          (installs @google/genai)
-//   export GEMINI_API_KEY=...            (from https://aistudio.google.com/apikey)
+//   echo GEMINI_API_KEY=... > .env       (key from https://aistudio.google.com/apikey —
+//                                          .env is gitignored and auto-loaded below, so the
+//                                          key never needs to go on the command line)
 //   mkdir -p gemini-ref
 //   # drop reference PNGs in gemini-ref/: style-sheet.png (fallback for any
 //   # category) and/or category-specific ones: npcs.png, crops.png,
@@ -38,10 +40,35 @@ const GAMEDATA_DIR = join(PROJECT_ROOT, 'Assets/Resources/GameData');
 const OUT_ROOT = join(HERE, 'gemini-out');
 const REF_DIR = join(HERE, 'gemini-ref');
 const FAIL_LOG = join(HERE, 'gemini-failures.log');
+const ENV_FILE = join(HERE, '.env');
+
+// Load .env (KEY=value per line) into process.env without a dependency — keeps
+// secrets out of shell history/command lines entirely; .env is gitignored.
+if (existsSync(ENV_FILE)) {
+    for (const line of readFileSync(ENV_FILE, 'utf8').split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq === -1) continue;
+        const key = trimmed.slice(0, eq).trim();
+        const value = trimmed.slice(eq + 1).trim();
+        if (!(key in process.env)) process.env[key] = value;
+    }
+}
 
 const MODEL = 'gemini-3.1-flash-image';
 const NO_TEXT_RULE = 'Do not render any text, numbers, IDs, or labels inside the image itself — image content only.';
-const STYLE_PREFIX = 'Using the established Cosmic Bloom pixel-art style (reference image attached), ';
+const TRANSPARENT_RULE = 'The background must be genuinely transparent (real alpha channel, not a solid color or checkerboard drawn as pixels) — only the subject itself should have opaque pixels.';
+// Learned the hard way: without this, the model treats the attached reference
+// as a canvas to edit/extend rather than pure style guidance, and pastes the
+// new subject on top of the actual reference sheet instead of generating an
+// isolated image (observed on the first real npcs/zyx generation).
+const REFERENCE_ONLY_RULE = 'The attached image is a STYLE REFERENCE ONLY, showing the art style, color ' +
+    'approach, proportions, and outline treatment to match. Do NOT reproduce, crop, overlay, extend, or ' +
+    'otherwise incorporate any part of the attached reference image itself into your output — none of its ' +
+    'existing characters/objects/layout should appear. Generate a brand-new, single, standalone image ' +
+    'containing ONLY the new subject described below, isolated on a plain or transparent background.';
+const STYLE_PREFIX = `Using the established Cosmic Bloom pixel-art style. ${REFERENCE_ONLY_RULE} `;
 
 // ---- CLI ----
 const args = process.argv.slice(2);
@@ -104,8 +131,12 @@ function buildNpcJobs() {
         id: n.id,
         category: 'npcs',
         outPath: join(OUT_ROOT, 'npcs', `${n.id}.png`),
-        prompt: `${STYLE_PREFIX}generate ONE character portrait for this NPC only. ` +
-            `Do not generate any other characters in this image. ${NO_TEXT_RULE}\n\n` +
+        prompt: `${STYLE_PREFIX}generate ONE character only, for this NPC, shown FULL-BODY standing ` +
+            `upright in a simple front-facing idle pose — head, torso, arms, AND legs/feet all fully ` +
+            `visible within the frame with even margin above and below. This is a top-down overworld ` +
+            `sprite the character stands in the game world as, NOT a portrait or dialogue-box bust: do ` +
+            `not crop at the shoulders or chest, do not zoom into just the face/head. ` +
+            `Do not generate any other characters in this image. ${NO_TEXT_RULE} ${TRANSPARENT_RULE}\n\n` +
             `Name: ${n.name}\nRole: ${n.role}\nPersonality: ${n.personality}\n` +
             `Region: ${n.region} (use this region's established palette family)\n` +
             `Body color: ${n.palette?.body}\nAccent color: ${n.palette?.accent}\n\n` +
@@ -120,8 +151,11 @@ function buildCropJobs() {
         category: 'crops',
         outPath: join(OUT_ROOT, 'crops', `${c.id}.png`),
         prompt: `${STYLE_PREFIX}generate ONE crop only, shown at all of its growth stages in a ` +
-            `left-to-right strip from smallest sprout to fully mature/harvest-ready. Same canvas ` +
-            `size for every stage. ${NO_TEXT_RULE}\n\n` +
+            `single left-to-right strip from smallest sprout to fully mature/harvest-ready, filling ` +
+            `the ENTIRE canvas edge-to-edge with no blank margins or empty space. Exactly ${c.stages} ` +
+            `stage${c.stages === 1 ? '' : 's'} total, evenly spaced in ONE row only — do not add a ` +
+            `second row, extra bonus panels, alternate variants, or any content beyond these ` +
+            `${c.stages} stages. Same canvas size for every stage. ${NO_TEXT_RULE} ${TRANSPARENT_RULE}\n\n` +
             `Crop: ${c.name}\nArchetype: ${c.archetype} (${ARCHETYPE_HINT[c.archetype] || ''})\n` +
             `Number of stages: ${c.stages}\nFruit/flower color: ${c.color}\nFoliage color: ${c.leafColor}` +
             (c.id === 'heartseed' ? '\nThis is the finale crop — give its final stage a climactic, special feel.' : ''),
@@ -134,7 +168,7 @@ function buildAnimalJobs() {
         id: a.id,
         category: 'animals',
         outPath: join(OUT_ROOT, 'animals', `${a.id}.png`),
-        prompt: `${STYLE_PREFIX}generate ONE animal only. ${NO_TEXT_RULE}\n\n` +
+        prompt: `${STYLE_PREFIX}generate ONE animal only. ${NO_TEXT_RULE} ${TRANSPARENT_RULE}\n\n` +
             `Animal: ${a.name} (${a.kind})\nBody color: ${a.palette?.body}\nAccent color: ${a.palette?.accent}\n` +
             `Notes: ${a.notes || ''}\n\n` +
             `Give it a clearly distinct silhouette from other similarly-shaped animals in this game — ` +
@@ -151,10 +185,14 @@ function buildTileJobs() {
                 id: `${r.id}_tier${tier}`,
                 category: 'tiles',
                 outPath: join(OUT_ROOT, 'tiles', `${r.id}_tier${tier}.png`),
-                prompt: `${STYLE_PREFIX}generate ONE single tileable ground texture — not a scene, ` +
-                    `not a composition of multiple tiles, not a field or garden layout. Just one ` +
-                    `square unit of texture that will be repeated edge-to-edge across a grid. It ` +
-                    `must loop with no visible seam when placed next to copies of itself. ${NO_TEXT_RULE}\n\n` +
+                prompt: `${STYLE_PREFIX}generate a single continuous ground-texture image that fills ` +
+                    `the ENTIRE canvas edge-to-edge with one uniform terrain surface, like looking ` +
+                    `straight down at one patch of ground from above. This is NOT a grid of separate ` +
+                    `objects, NOT a tileset or atlas of multiple icons, NOT a collection of individual ` +
+                    `plants/rocks/props arranged in a pattern — it is ONE continuous textured surface ` +
+                    `(think of it like a fabric or terrain texture swatch), where any detail (cracks, ` +
+                    `tufts, speckling) is a small incidental part of that single surface, never a ` +
+                    `distinct object repeated many times across the frame. ${NO_TEXT_RULE}\n\n` +
                     `Region: ${r.name}\nTier: ${TIER_DESC[tier]}\nBase color: ${color}`,
             });
         });
@@ -176,7 +214,7 @@ function buildLandmarkJobs() {
                         `${state.toUpperCase()} state. ${state === 'ruined'
                             ? 'It should look dull, cracked, or dormant.'
                             : 'It should feel bright and magical, visibly healed — but still clearly the same structure as its ruined counterpart.'} ` +
-                        `Keep it modest in scale (a small building/feature, not a monument). ${NO_TEXT_RULE}\n\n` +
+                        `Keep it modest in scale (a small building/feature, not a monument). ${NO_TEXT_RULE} ${TRANSPARENT_RULE}\n\n` +
                         `Structure: ${lm.name}\nRegion: ${r.name}\nConcept: ${LANDMARK_CONCEPT[lm.id] || lm.name}`,
                 });
             }

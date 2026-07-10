@@ -96,6 +96,67 @@ namespace CosmicBloom.World
             return s;
         }
 
+        /// <summary>Small rounded stone silhouette for ambient ground decoration, white — tint via renderer.</summary>
+        public static Sprite Rock(int w = 20, int h = 13)
+        {
+            string key = $"rock_{w}x{h}";
+            if (_cache.TryGetValue(key, out var s)) return s;
+
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var clear = new Color(0, 0, 0, 0);
+            float cx = w * 0.5f, cy = h * 0.45f, rx = w * 0.46f, ry = h * 0.42f;
+            float bumpX = w * 0.68f, bumpY = h * 0.6f, bumpR = h * 0.28f;   // extra lump for an irregular silhouette
+
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float dx = (x - cx) / rx, dy = (y - cy) / ry;
+                    bool body = dx * dx + dy * dy <= 1f;
+                    bool bump = (x - bumpX) * (x - bumpX) + (y - bumpY) * (y - bumpY) <= bumpR * bumpR;
+                    tex.SetPixel(x, y, body || bump ? Color.white : clear);
+                }
+            tex.Apply();
+            s = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.15f), 32f);
+            _cache[key] = s;
+            return s;
+        }
+
+        /// <summary>Small 3-blade grass tuft for ambient ground decoration, white — tint via renderer.</summary>
+        public static Sprite Tuft(int w = 14, int h = 18)
+        {
+            string key = $"tuft_{w}x{h}";
+            if (_cache.TryGetValue(key, out var s)) return s;
+
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var clear = new Color(0, 0, 0, 0);
+            float baseY = h * 0.1f;
+            (float tipX, float tipY, float width)[] blades =
+            {
+                (w * 0.22f, h * 0.95f, w * 0.16f),
+                (w * 0.5f,  h * 1.0f,  w * 0.14f),
+                (w * 0.78f, h * 0.9f,  w * 0.16f),
+            };
+
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    bool onBlade = false;
+                    foreach (var (tipX, tipY, width) in blades)
+                    {
+                        if (y < baseY || y > tipY) continue;
+                        float t = (y - baseY) / Mathf.Max(1f, tipY - baseY);   // 0 at base, 1 at tip
+                        float halfW = Mathf.Lerp(width, 0f, t) * 0.5f;
+                        float centerX = Mathf.Lerp(w * 0.5f, tipX, t);
+                        if (Mathf.Abs(x - centerX) <= halfW) { onBlade = true; break; }
+                    }
+                    tex.SetPixel(x, y, onBlade ? Color.white : clear);
+                }
+            tex.Apply();
+            s = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.05f), 32f);
+            _cache[key] = s;
+            return s;
+        }
+
         /// <summary>"#rrggbb" → Color; magenta on bad input (visually obvious placeholder failure).</summary>
         public static Color ParseHex(string hex)
         {
