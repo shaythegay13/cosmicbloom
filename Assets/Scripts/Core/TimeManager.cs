@@ -23,6 +23,29 @@ namespace CosmicBloom.Core
         public bool IsDay => !IsNight;
         public int DayNumber { get; private set; } = 1;
 
+        /// <summary>
+        /// P3-Phase 16: the daylight span [dayStart, nightStart) split into three
+        /// equal periods so NPC schedules get intermediate stops; Night is the
+        /// existing night window unchanged. Boundaries derive from dayStart/
+        /// nightStart, so the day/night binary and the periods can never disagree
+        /// (Morning|Midday|Evening ⇔ IsDay).
+        /// </summary>
+        public enum DayPeriod { Morning, Midday, Evening, Night }
+
+        public DayPeriod CurrentPeriod
+        {
+            get
+            {
+                if (IsNight) return DayPeriod.Night;
+                float third = (nightStart - dayStart) / 3f;
+                if (timeOfDay < dayStart + third) return DayPeriod.Morning;
+                if (timeOfDay < dayStart + third * 2f) return DayPeriod.Midday;
+                return DayPeriod.Evening;
+            }
+        }
+
+        public event Action<DayPeriod> OnPeriodChanged;
+
         /// <summary>Restore the persisted day counter on load.</summary>
         public void SetDayNumber(int day) => DayNumber = Mathf.Max(1, day);
 
@@ -31,6 +54,7 @@ namespace CosmicBloom.Core
         public event Action<int> OnNewDay;
 
         bool _wasNight;
+        DayPeriod _lastPeriod;
 
         void Awake()
         {
@@ -38,6 +62,7 @@ namespace CosmicBloom.Core
             Instance = this;
             DontDestroyOnLoad(gameObject);
             _wasNight = IsNight;
+            _lastPeriod = CurrentPeriod;
         }
 
         void OnDestroy()
@@ -59,6 +84,13 @@ namespace CosmicBloom.Core
             if (_wasNight && IsDay) OnSunrise?.Invoke();
             else if (!_wasNight && IsNight) OnNightfall?.Invoke();
             _wasNight = IsNight;
+
+            var period = CurrentPeriod;
+            if (period != _lastPeriod)
+            {
+                _lastPeriod = period;
+                OnPeriodChanged?.Invoke(period);
+            }
         }
 
         /// <summary>Can a crop with this growsAt window ("day"/"night"/"any") grow right now?</summary>

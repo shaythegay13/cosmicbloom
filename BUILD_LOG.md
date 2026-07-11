@@ -2,6 +2,82 @@
 
 ---
 
+## P3-Phase 16 — NPC daily schedules (2026-07-11)
+
+NPCs now move between schedule stops over the day instead of standing on one
+ring point forever. Data-driven where data exists (`activeAt` windows), code-
+side geometry where it doesn't (stop positions).
+
+**DECISION (mechanical) — TimeManager day periods.** `timeOfDay` was already
+a continuous 0–1 float, so no clock rework: added a 4-period
+`TimeManager.DayPeriod` enum (Morning/Midday/Evening/Night) + `CurrentPeriod`
++ `OnPeriodChanged` event. The daylight span `[dayStart, nightStart)` splits
+into three equal thirds (~[0.25,0.427) / [0.427,0.603) / [0.603,0.78));
+Night is the existing night window untouched. Boundaries DERIVE from
+`dayStart`/`nightStart`, so the old day/night binary and the periods can
+never disagree (`Morning|Midday|Evening ⇔ IsDay`). `OnSunrise`/`OnNightfall`
+and all crop-gating behavior unchanged.
+
+**DECISION (mechanical) — schedule data model: code-side `NpcSchedule`
+static class, NOT an npcs.json field** (same pattern as `ExploreTargets` and
+`AnimalSpawner.ExclusiveRegionByAnimal`). Why: schedule stops are world
+positions, and npcs.json carries no coordinates anywhere — every world
+position is runtime-derived from `RegionWorldBuilder` consts. Coordinates in
+data would be a second source of truth that silently breaks on the next
+region resize (the Phase 15 lesson). Stops derive generically per NPC, so no
+invented per-NPC content across 50 NPCs either:
+- **Home** = the NPC's existing spawn-ring point (r=14.4, angle by roster
+  index — unchanged from before).
+- **Work** = same bearing at r=9.5, just outside the ±8 lush farm core (in
+  the mid ring, so NPCs don't stand on farmable plots and steal taps).
+- **Social** = one shared plaza per region at center+(0,−11), so NPCs
+  visibly gather.
+These offsets join the CLAUDE.md scale-with-resize list.
+
+**Schedule table** (`NpcSchedule.StopFor`, keyed off each NPC's existing
+`activeAt`): day folk Work→Social→Home→Home across the four periods; night
+folk mirror into their waking window (Home/Home/Work/Social); `any` folk
+take a second work shift (Work/Social/Work/Home). Visibility rules
+(`ApplyTimeOfDay` hiding off-shift NPCs) are untouched and orthogonal —
+hidden NPCs still walk, so they're in place when they reappear.
+
+**Movement**: simple waypoint-to-waypoint per spec — `Vector3.MoveTowards`
+at `walkSpeed` 1.6 u/s in `NpcController.Update` toward the current period's
+stop; snap directly to the current stop on spawn (no cross-region marches on
+load), walk on subsequent `OnPeriodChanged`. No pathfinding, no player-style
+tap autonomy. Tests without a TimeManager keep the old static ring behavior.
+
+**Data gap flagged (step 4 of spec, NOT built)**: npcs.json dialogue objects
+carry only `intro`/`idle`/`quest_complete` across all 50 NPCs — no location-
+or period-keyed lines exist, so schedule-aware dialogue has nothing to read.
+Per spec, no dialogue content was invented and no dead lookup mechanism was
+added. When/if data grows keys like `idle_work`/`idle_social`, wire them in
+`NpcController.Interact`.
+
+**Verification evidence**:
+- Compile: `Logs/phase16_compile.log` — 0 `error CS`, 0 warnings.
+- New tests (`Phase16NpcScheduleTests`): period boundaries + binary
+  consistency, stop-mapping table (incl. 2+ distinct stops for every
+  `activeAt` value present in data), and the real transform test —
+  `Logs/phase16_new_nographics2.xml` 3/3. Log line:
+  `zyx walked Work (28.75, 23.70) → Social (20.02, 9.04) at Midday ✓`
+  (first run failed honestly on frame budget — batchmode deltaTime is tiny,
+  NPC covered 12.7 of 17.1 units in 300 frames; fixed by test walkSpeed
+  200 + 3000-frame cap, production speed untouched).
+- Screenshots (render split): `Logs/phase16_npc_morning_work.png` (elder_nova
+  at the Work stop, daylight) vs `Logs/phase16_npc_night_home.png` (same NPC
+  at its Home ring point, night lighting) — same NPC, two locations, two
+  times; positions differ by ~4.9u, visually confirmed, pixel coordinates
+  logged in `Logs/phase16_new_render.log`.
+- Full regression: `Logs/p16_split_nographics.xml` **65/65** +
+  `Logs/p16_split_render.xml` **11/11** = **76/76**. New canonical filter
+  lists: `Logs/phase16_nographics_filter.txt` (65 names, BOM-free) +
+  `Logs/phase16_render_names.txt` (11 render names).
+
+**P3-Phase 16: COMPLETE ✅**
+
+---
+
 ## Player-character sprite — procedural stopgap (2026-07-10)
 
 Direct answer to a direct question: the player was NOT in the 150-sprite

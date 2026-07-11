@@ -11,9 +11,16 @@ namespace CosmicBloom.World
     {
         public NpcDef Def { get; private set; }
 
+        [Tooltip("World units/sec between schedule stops (P3-Phase 16)")]
+        public float walkSpeed = 1.6f;
+
         SpriteRenderer _body;
         bool _subscribed;
         GameState _state;
+        Vector3 _regionCenter;
+        float _ringAngle;
+        Vector3 _scheduleTarget;
+        bool _hasScheduleTarget;
         static readonly System.Collections.Generic.HashSet<string> _metFallback = new();
         static readonly Color CueColor = new Color(1f, 0.95f, 0.7f, 1f);   // warm "someone to meet" cream
 
@@ -74,8 +81,20 @@ namespace CosmicBloom.World
             npc.Def = def;
             npc._body = body;
             npc._state = state;
+            npc._regionCenter = regionCenter;
+            npc._ringAngle = angle;
             InteractionCue.Attach(go, CueColor);
             npc.ApplyTimeOfDay();
+
+            // P3-Phase 16: start the day already at the current schedule stop
+            // (snap on spawn, walk on later transitions). Without a TimeManager
+            // (some tests) the NPC just keeps its ring/home position.
+            if (TimeManager.Instance != null)
+            {
+                go.transform.position = NpcSchedule.StopPosition(
+                    NpcSchedule.StopFor(def.activeAt, TimeManager.Instance.CurrentPeriod),
+                    regionCenter, angle);
+            }
             return npc;
         }
 
@@ -87,6 +106,7 @@ namespace CosmicBloom.World
             if (_subscribed || TimeManager.Instance == null) return;
             TimeManager.Instance.OnSunrise += ApplyTimeOfDay;
             TimeManager.Instance.OnNightfall += ApplyTimeOfDay;
+            TimeManager.Instance.OnPeriodChanged += OnPeriodChanged;
             _subscribed = true;
         }
 
@@ -96,7 +116,25 @@ namespace CosmicBloom.World
             {
                 TimeManager.Instance.OnSunrise -= ApplyTimeOfDay;
                 TimeManager.Instance.OnNightfall -= ApplyTimeOfDay;
+                TimeManager.Instance.OnPeriodChanged -= OnPeriodChanged;
             }
+        }
+
+        /// <summary>New day period → walk to this NPC's stop for it (P3-Phase 16).</summary>
+        void OnPeriodChanged(TimeManager.DayPeriod period)
+        {
+            _scheduleTarget = NpcSchedule.StopPosition(
+                NpcSchedule.StopFor(Def.activeAt, period), _regionCenter, _ringAngle);
+            _hasScheduleTarget = true;
+        }
+
+        void Update()
+        {
+            if (!_hasScheduleTarget) return;
+            transform.position = Vector3.MoveTowards(
+                transform.position, _scheduleTarget, walkSpeed * Time.deltaTime);
+            if ((transform.position - _scheduleTarget).sqrMagnitude < 0.0001f)
+                _hasScheduleTarget = false;
         }
 
         /// <summary>Day-only NPCs sleep at night and vice versa (activeAt from data).</summary>
