@@ -2,6 +2,34 @@
 
 ---
 
+## P3-Phase 16 follow-up — social plaza scatter fix (2026-07-11)
+
+Shay's live playtest caught what the Phase 16 test suite couldn't: at Midday,
+every day/`any` NPC in a region converged on the *exact same* plaza point —
+7 vale NPCs rendered as one overlapped sprite, reading as "they all moved off
+the map." Live MCP inspection confirmed all 50 NPCs were in-bounds and
+exactly where the schedule put them; the defect was zero spread at the
+Social stop (Home/Work never stack — each NPC keeps its own ring bearing).
+
+- Fix: `NpcSchedule.StopPosition` Social arm adds a per-NPC offset on a
+  `SocialScatter = 2.5` ring around the plaza center, using the roster
+  bearing the function already receives — deterministic, no data, no
+  signature change. 10 evenly-spaced slots → min neighbor spacing ~1.55u.
+- New test `SocialStop_ScattersPerNpc_NoStacking`: all 10 roster slots'
+  plaza spots pairwise >1u apart and within the scatter ring.
+- Why the suite missed it: the movement/screenshot tests spawned ONE NPC;
+  no test ever ran a full roster with schedules live. The new test closes
+  that specific hole (full-roster live-schedule coverage generally is still
+  thin — noted, not built).
+- Verified live in the editor before the headless run: 9 vale social-goers
+  each exactly 2.5 from plaza center, min pairwise distance 1.54, scene
+  capture shows a readable gathering of distinct characters.
+- Full regression: `Logs/p16b_split_nographics.xml` **66/66** +
+  `Logs/p16b_split_render.xml` **11/11**. Canonical nographics filter
+  updated in place: `Logs/phase16_nographics_filter.txt` now 66 names.
+
+---
+
 ## P3-Phase 16 — NPC daily schedules (2026-07-11)
 
 NPCs now move between schedule stops over the day instead of standing on one

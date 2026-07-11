@@ -88,6 +88,31 @@ namespace CosmicBloom.Tests
             }
         }
 
+        [Test]
+        public void SocialStop_ScattersPerNpc_NoStacking()
+        {
+            // Live-playtest regression (2026-07-11): a full 10-NPC roster sharing
+            // one exact plaza point rendered as a single NPC — "they all moved
+            // off the map". Every roster slot must get its own plaza spot.
+            var center = new Vector3(20f, 20f, 0f);
+            var positions = new System.Collections.Generic.List<Vector3>();
+            for (int i = 0; i < 10; i++)   // NpcController.Spawn's ring-angle formula, 10 per region
+            {
+                float angle = (Mathf.PI * 2f * i) / 10f + 0.4f;
+                positions.Add(NpcSchedule.StopPosition(NpcSchedule.Stop.Social, center, angle));
+            }
+
+            var plaza = center + NpcSchedule.SocialOffset;
+            for (int i = 0; i < positions.Count; i++)
+            {
+                Assert.LessOrEqual((positions[i] - plaza).magnitude, NpcSchedule.SocialScatter + 0.01f,
+                    $"slot {i} stays gathered near the plaza");
+                for (int j = i + 1; j < positions.Count; j++)
+                    Assert.Greater((positions[i] - positions[j]).magnitude, 1f,
+                        $"slots {i} and {j} must not stack on the same point");
+            }
+        }
+
         [UnityTest]
         public IEnumerator NpcWalksToNewStop_AtPeriodTransition()
         {

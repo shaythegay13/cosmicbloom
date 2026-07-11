@@ -27,6 +27,9 @@ namespace CosmicBloom.World
         public const float HomeRadius = 14.4f;   // = NpcController spawn ring
         public const float WorkRadius = 9.5f;    // just outside the ±8 lush core, in the mid ring
         public static readonly Vector3 SocialOffset = new Vector3(0f, -11f, 0f);   // shared plaza south of the fields
+        public const float SocialScatter = 2.5f; // per-NPC ring around the plaza — without it a
+                                                 // region's whole roster stacks on one point and
+                                                 // renders as a single NPC (found in live playtest)
 
         /// <summary>Where an NPC with this activeAt window should be during this period.</summary>
         public static Stop StopFor(string activeAt, TimeManager.DayPeriod period) => activeAt switch
@@ -62,7 +65,8 @@ namespace CosmicBloom.World
         public static Vector3 StopPosition(Stop stop, Vector3 regionCenter, float ringAngle) => stop switch
         {
             Stop.Work => regionCenter + new Vector3(Mathf.Cos(ringAngle) * WorkRadius, Mathf.Sin(ringAngle) * WorkRadius, 0f),
-            Stop.Social => regionCenter + SocialOffset,
+            Stop.Social => regionCenter + SocialOffset
+                + new Vector3(Mathf.Cos(ringAngle) * SocialScatter, Mathf.Sin(ringAngle) * SocialScatter, 0f),
             _ => regionCenter + new Vector3(Mathf.Cos(ringAngle) * HomeRadius, Mathf.Sin(ringAngle) * HomeRadius, 0f),
         };
     }
