@@ -10,8 +10,9 @@ namespace CosmicBloom.World
     public static class LandmarkSpawner
     {
         // slots around the lush core, per landmark index within its region
-        // (scaled 2x with the P3-Phase 15 region resize to 40x40)
-        static readonly Vector3[] Slots =
+        // (scaled 2x with the P3-Phase 15 region resize to 40x40). Public so
+        // ReservedTiles can carve these fixed structures out of tillable ground.
+        public static readonly Vector3[] Slots =
         {
             new(-13f, 11f), new(0f, 14f), new(13f, 11f), new(-13f, -11f), new(13f, -11f),
         };

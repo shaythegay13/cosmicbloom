@@ -17,6 +17,7 @@ namespace CosmicBloom.World
         public Vector3? MoveTarget { get; private set; }
 
         IInteractable _pendingInteract;
+        Vector2Int? _pendingTill;   // free-form till target reached by walking there
         Camera _cam;
         bool _pressWasHeld;
 
@@ -64,11 +65,32 @@ namespace CosmicBloom.World
                     return;
                 }
                 _pendingInteract = interactable;
+                _pendingTill = null;
                 SetMoveTarget(interactable.InteractPosition);
                 return;
             }
 
+            // Free-form farming (P3-Phase 17): tapping bare, tillable ground tills a
+            // fresh plot there. Already-tilled cells own a FarmPlot collider and route
+            // through the IInteractable branch above; only the first till comes here.
+            var fg = RegionManager.Instance != null
+                ? FarmGrid.ForRegion(RegionManager.Instance.CurrentRegionId) : null;
+            if (fg != null && fg.TryTargetTill(world, out var tillPos, out var tillCell))
+            {
+                if (Vector2.Distance(transform.position, tillPos) <= interactRange)
+                {
+                    CancelMove();
+                    fg.TillAt(tillCell);
+                    return;
+                }
+                _pendingInteract = null;
+                _pendingTill = tillCell;
+                SetMoveTarget(tillPos);
+                return;
+            }
+
             _pendingInteract = null;
+            _pendingTill = null;
             SetMoveTarget(world);
         }
 
@@ -84,6 +106,7 @@ namespace CosmicBloom.World
         {
             MoveTarget = null;
             _pendingInteract = null;
+            _pendingTill = null;
         }
 
         /// <summary>Advance movement by dt. Split out so tests can drive it deterministically.</summary>
@@ -99,9 +122,13 @@ namespace CosmicBloom.World
                 MoveTarget = null;
 
                 var pending = _pendingInteract;
+                var pendingTill = _pendingTill;
                 _pendingInteract = null;
+                _pendingTill = null;
                 if (pending != null && InRange(pending))
                     pending.Interact(this);
+                else if (pendingTill.HasValue && RegionManager.Instance != null)
+                    FarmGrid.ForRegion(RegionManager.Instance.CurrentRegionId)?.TillAt(pendingTill.Value);
             }
         }
 

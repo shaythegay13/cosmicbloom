@@ -101,7 +101,12 @@ namespace CosmicBloom.Farming
 
             foreach (var cell in AreaFor(action, tier, x, y))
             {
-                if (!World.RegionWorldBuilder.IsFarmable(cell.x, cell.y)) continue;
+                // P3-Phase 17: free-form placement — any in-bounds ground cell is
+                // tillable, not just the lush core. Reserved cells (landmarks/plaza)
+                // are excluded from tilling; water/harvest AoE can't touch them anyway
+                // since only tilled cells hold a plot.
+                if (!World.RegionWorldBuilder.InBounds(cell.x, cell.y)) continue;
+                if (action == "till" && World.ReservedTiles.IsReserved(cell.x, cell.y)) continue;
                 bool ok = action switch
                 {
                     "till" => farming.Till(cell.x, cell.y),

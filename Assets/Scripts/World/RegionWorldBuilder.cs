@@ -29,7 +29,17 @@ namespace CosmicBloom.World
             return 0;
         }
 
+        /// <summary>Tier-2 lush core. Still used for decoration placement and tests;
+        /// it is no longer a tilling gate (P3-Phase 17 free-form placement).</summary>
         public static bool IsFarmable(int x, int y) => TierAt(x, y) == 2;
+
+        public static bool InBounds(int x, int y) => x >= 0 && x < Size && y >= 0 && y < Size;
+
+        /// <summary>P3-Phase 17: any in-bounds ground cell can be tilled (wild/mid/lush),
+        /// except cells reserved for fixed structures (see <see cref="ReservedTiles"/>).
+        /// Soil tier is a quality modifier, not a placement gate — FarmingSystem.Till
+        /// seeds lower-tier cells with poorer starting soil.</summary>
+        public static bool IsTillable(int x, int y) => InBounds(x, y) && !ReservedTiles.IsReserved(x, y);
 
         /// <summary>World-space origin of a region by its index in regions.json order.</summary>
         public static Vector3 OriginOf(int regionIndex) => new(regionIndex * Spacing, 0f, 0f);

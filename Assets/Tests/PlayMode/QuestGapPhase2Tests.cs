@@ -134,6 +134,7 @@ namespace CosmicBloom.Tests
             float deadline = Time.time + 3f;
             while (_engine.StepIndex("q_lost_seed") == 0 && Time.time < deadline) yield return null;
             Assert.AreEqual(1, _engine.StepIndex("q_lost_seed"), "proximity poll advanced past explore");
+            yield return null;   // ExploreMarkerSpawner.Sync uses Object.Destroy (defers to end-of-frame)
             Assert.AreEqual(0, Object.FindObjectsByType<ExploreMarkerController>().Length,
                 "beacon despawned once its step is done");
 

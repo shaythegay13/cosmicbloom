@@ -1,6 +1,7 @@
 // P3-Phase 15 verification — the structural region resize (20x20 → 40x40):
 //  * tier rings scale proportionally (wild 0..5, mid 6..11, lush core 12..27)
-//  * the farmable core is 16x16 = 256 cells and FarmGrid actually populates it
+//  * the lush core is 16x16 = 256 cells (tier-2 quality zone; since P3-Phase 17
+//    FarmGrid populates plot views on demand, not eagerly — see that test)
 //  * regions sit 80 apart (one region-width travel gap preserved)
 //  * SaveMigration shifts pre-resize plot keys +6/+6 exactly once, drops the
 //    stored player position, and stamps worldVersion so it can't run twice
@@ -40,22 +41,30 @@ namespace CosmicBloom.Tests
             Assert.AreEqual(256, farmable, "16x16 lush core = 256 farmable plots per region");
         }
 
+        // P3-Phase 17: FarmGrid no longer eagerly instantiates the 256-cell core.
+        // Views exist only for plots that actually exist — those restored from the
+        // save on load, and new ones the moment a cell is tilled (on demand).
         [UnityTest]
-        public IEnumerator FarmGrid_Populates256PlotViews()
+        public IEnumerator FarmGrid_CreatesViewsOnDemand_NotEagerly()
         {
             GameDatabase.LoadAll();
             var regions = new GameObject("TestRegions").AddComponent<RegionManager>();
             var grids = RegionWorldBuilder.BuildAll(regions);
             var state = new GameState(new SaveSnapshot());
+            state.Save.currentRegion = "starlight_vale";
             var farming = new FarmingSystem(state);
 
             var fg = FarmGrid.Create("starlight_vale", grids["starlight_vale"], farming, state);
             yield return null;
+            Assert.AreEqual(0, fg.transform.childCount, "empty save → no eager plot views (was 256)");
 
-            Assert.AreEqual(256, fg.transform.childCount, "one plot view per lush-core cell");
-            Assert.IsNotNull(GameObject.Find("Plot_12_12"), "core corner cell has a view");
-            Assert.IsNotNull(GameObject.Find("Plot_27_27"), "opposite core corner has a view");
-            Assert.IsNull(GameObject.Find("Plot_11_11"), "mid-ring cell has no plot view");
+            // tilling a cell materialises exactly one view, wherever it is — a wild
+            // outer-ring cell far from the old lush-core footprint
+            Assert.IsTrue(farming.Till(3, 3), "till a wild-tier cell");
+            yield return null;
+            Assert.AreEqual(1, fg.transform.childCount, "one view created on demand");
+            Assert.IsNotNull(GameObject.Find("Plot_3_3"), "the tilled wild cell has a view");
+            Assert.AreEqual(0, RegionWorldBuilder.TierAt(3, 3), "(3,3) is wild tier — outside the old 256 core");
 
             foreach (var kv in grids) Object.DestroyImmediate(kv.Value.gameObject);
             Object.DestroyImmediate(regions.gameObject);

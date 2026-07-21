@@ -2,6 +2,114 @@
 
 ---
 
+## P3-Phase 17 — free-form farm plot placement (2026-07-21)
+
+Replaced the fixed 256-position lush-core grid with free-form placement: tap any
+tillable ground cell (wild/mid/lush) to till it and create a plot there.
+
+**Q1 — data model already supported it.** `FarmingSystem.plots` keys by `"x,y"`
+region-local cell coords with no coordinate-range restriction in
+till/plant/water/harvest. The 256-cell ceiling lived entirely in two view/gating
+layers: `FarmGrid` eagerly instantiating one `FarmPlot` per `IsFarmable` (tier-2)
+cell, and `ToolService.Perform` filtering AoE cells through `IsFarmable`. No
+dictionary rework needed — only those two layers changed.
+
+**Rendering approach (Q4) — on-demand views, chosen over eager instantiation.**
+~1600 cells/region × 5 regions = 8000 GameObjects is far too many to pre-spawn.
+`FarmGrid` now materialises a `FarmPlot` view only where a plot actually exists:
+for plots restored from the save on load, and for new ones the instant a cell is
+tilled. It subscribes to `FarmingSystem.OnAction` and spawns the view on any
+`"till"` from any caller (player tap, quest scripting, a test) — which also kept
+every existing `farming.Till(...)`-then-expect-a-view test working unchanged.
+`FarmGrid.ForRegion(id)` is a static per-region registry so `PlayerController`'s
+tap path can reach the current grid without being wired into the player at spawn.
+
+**Interaction (Q2).** `PlayerController.OnTapWorld`: a tap that hits no
+`IInteractable` collider now asks the current region's `FarmGrid` whether the
+cell is a fresh tillable ground cell; if so it walks there and tills (or tills
+immediately if in range). Already-tilled cells own a `FarmPlot` collider and
+route through the existing `IInteractable` path for plant/water/harvest. Landmark
+and NPC colliders are hit before ground, so you interact with them rather than
+tilling underneath.
+
+**Exclusions (Q2).** `RegionWorldBuilder.IsTillable` = in-bounds AND not
+`ReservedTiles.IsReserved`. `ReservedTiles` (region-local, identical per region
+because both sources are region-relative offsets from center) reserves landmark
+`Slots` footprints (3×3 each) and the NPC social plaza + scatter ring.
+**DECISION:** per-NPC Home/Work schedule stops are NOT reserved — unlike the
+fixed plaza they are mobile, per-roster ring positions that vary by NPC count
+and time of day, and reserving every one would arbitrarily fragment the newly
+free farmland. NPCs already walk across the farm area, and tap routing hits
+their collider before the ground, so you never till "under" one anyway.
+
+**Soil tier = quality modifier, not a placement gate (Q3). DECISION.**
+`FarmingSystem.StartingSoilFor` seeds a freshly tilled cell by tier: lush 100 /
+mid 80 / wild 65. Everywhere is tillable; not everywhere is equally good (lower
+starting soil drains toward the plant-floor sooner). The 65 floor is chosen to
+sit **above** the `q_soil_secrets` "soil_above 60" poll so that quest stays
+completable on any freshly tilled ground exactly as before — an aggressive
+wild=45 first draft broke it and cascaded a RegionManager-singleton test failure
+across the suite (root-caused and fixed before this entry). Only the lush core
+seeds a fresh 100, matching `q_perfect_soil`'s "soil_above 100" theme without
+making it uncompletable (the 256-cell core supplies its 20 plots trivially; no
+test drives it at non-lush cells). This is the one player-facing balance nuance
+in the change and is flagged here rather than decided silently.
+
+**Server plot cap (Q5). DECISION — live but low-risk; guarded, not raised.**
+`server/routes/game.js#validateSnapshot` rejects any farm with >1000 plots.
+Free placement makes >1000-in-one-region *reachable* (was capped at 256), so a
+determined completionist could build a save the backend refuses to sync. It is
+**not** a practical risk for normal play (1000+ hand-tilled taps is 4× the old
+whole-game max), and the failure is a silent server-reject, not a crash. Rather
+than touch the untouchable backend, `FarmingSystem.MaxPlotsPerFarm` (1000)
+refuses to create the 1001st plot client-side so local saves stay server-valid.
+Flagging in case the intended ceiling should differ — the guard is a mechanical
+safety measure, the ceiling itself is a design call.
+
+**Tests reworked, not bolted on (Q7).** `Phase15WorldResizeTests` swapped its
+`FarmGrid_Populates256PlotViews` (asserted the removed eager behavior) for
+`FarmGrid_CreatesViewsOnDemand_NotEagerly`. `FarmLoopTests` replaced the
+two-region pre-placed-plot tap test with `FreeForm_TapTillsBareGround_ThenFullLoop_AtWildCell`
+(Q6: till→plant→water→harvest end-to-end at **wild cell (3,3)**, far from the old
+12..27 core) plus `Till_StartingSoilVariesByGroundTier`, `Till_StopsAtServerPlotCap`,
+and `IsTillable_ExcludesReservedAndOutOfBoundsCells`. Fixed a pre-existing
+frame-timing race in `QuestGapPhase2Tests.Explore_…` (asserted a deferred
+`Object.Destroy` had run without yielding a frame first — the sibling pickup test
+already had the yield; my timing shift exposed it).
+
+**Screenshot (Q8):** `Logs/phase17_freeplace.png` — plots tilled in a free-form
+scatter across the wild outer ring (incl. a mature crop at wild (3,3)), mid ring,
+and a diagonal into the lush core; a layout impossible under the old core-only grid.
+
+**Regression:** full suite **81/81** green — `Logs/phase17_nographics.xml` 69/69
++ `Logs/phase17_render.xml` 12/12. Canonical split extended to
+`Logs/phase17_nographics_filter.txt` (69 names, BOM-free) +
+`Logs/phase17_render_names.txt` (12). Compile clean (`Logs/phase17_compile.log`,
+0 `error CS`).
+
+## Verification — ground tile art confirmation (2026-07-11)
+
+Shay asked for a fresh Play-mode screenshot of at least two full regions
+(post-resize, post-art-integration, post-schedules) and a direct confirmation
+of whether ground tiles render the real Gemini tile masks or fall back to
+flat `GroundTiers`-tinted color — not inferred from the code, checked against
+an actual render.
+
+- New test `RegionWorldTests.CaptureTwoRegionsCloseUpForTileArtCheck`: frames
+  one full region at a time (not the whole 5-region strip — that overview is
+  ~5px/unit, too zoomed out to tell texture from flat fill) at 1024x1024,
+  writes `Logs/phase17_closeup_<region>.png`, and logs luminance stddev of a
+  patch in the lush core (a flat `ProceduralSprites.Square` fallback would
+  read ~0 variance).
+- Result, run without `-nographics` (real render surface):
+  `starlight_vale` stddev=0.0357, `sun_garden` stddev=0.0614, both nonzero —
+  and the PNGs were eyeballed directly, not just the numbers: all three tiers
+  in both regions show a real woven/crosshatch texture with per-tile seams
+  and scattered pebble/debris decoration, correctly tinted per-region by
+  `groundTiers` as designed. **Confirmed: real Gemini tile art is active,
+  not the flat-color fallback.**
+- `Logs/phase17_closeup_run.xml` **1/1 PASS**.
+
 ## P3-Phase 16 follow-up — social plaza scatter fix (2026-07-11)
 
 Shay's live playtest caught what the Phase 16 test suite couldn't: at Midday,

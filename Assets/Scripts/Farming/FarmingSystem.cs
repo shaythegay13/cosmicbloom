@@ -16,10 +16,31 @@ namespace CosmicBloom.Farming
         public const float SoilRegenPerMinuteFallow = 1.5f;   // fallow plots heal over time
         public const float SoilFloorToPlant = 15f;            // too depleted to plant below this
 
+        // P3-Phase 17: matches server/routes/game.js#validateSnapshot's "too many
+        // plots" cap so free-form tilling can never build a save the backend rejects.
+        public const int MaxPlotsPerFarm = 1000;
+
         public FarmingSystem(GameState state) => _state = state;
 
         static string Key(int x, int y) => $"{x},{y}";
         static long NowMs() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        /// <summary>P3-Phase 17: ground tier is a soil-quality modifier, not a placement
+        /// gate. A freshly tilled cell inherits starting soil by tier — the lush core is
+        /// prime, the mid ring decent, the wild outer ring poorest. Everywhere is
+        /// tillable; not everywhere is equally good. Soil then drains/regenerates
+        /// through the existing crops.json soilDrain fields.
+        /// The gradient is deliberately floored ABOVE the q_soil_secrets "soil_above 60"
+        /// poll so that quest stays completable on any freshly tilled ground exactly as
+        /// before (P3-Phase 17 DECISION — see BUILD_LOG). Only the lush core seeds a
+        /// fresh 100, matching q_perfect_soil's "soil_above 100" theme without making it
+        /// uncompletable — the 256-cell core supplies that quest's 20 plots trivially.</summary>
+        static float StartingSoilFor(int x, int y) => World.RegionWorldBuilder.TierAt(x, y) switch
+        {
+            2 => 100f,   // lush core — prime dirt
+            1 => 80f,    // transitional mid ring
+            _ => 65f,    // wild outer ring — workable, worst dirt, still ≥ the soil-quest floor
+        };
 
         public PlotState PlotAt(int x, int y) =>
             _state.CurrentFarm.plots.TryGetValue(Key(x, y), out var plot) ? plot : null;
@@ -41,7 +62,9 @@ namespace CosmicBloom.Farming
             var key = Key(x, y);
             var farm = _state.CurrentFarm;
             if (farm.plots.TryGetValue(key, out var existing) && existing.tilled) return false;
-            farm.plots[key] = new PlotState { tilled = true, soilHealth = existing?.soilHealth ?? 100f };
+            // don't create a plot the server would reject on sync (per-farm cap)
+            if (existing == null && farm.plots.Count >= MaxPlotsPerFarm) return false;
+            farm.plots[key] = new PlotState { tilled = true, soilHealth = existing?.soilHealth ?? StartingSoilFor(x, y) };
             Fire("till", x, y);
             GameEvents.PlotTilled(_state.Save.currentRegion);
             return true;
