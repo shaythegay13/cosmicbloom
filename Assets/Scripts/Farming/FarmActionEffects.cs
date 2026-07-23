@@ -34,9 +34,16 @@ namespace CosmicBloom.Farming
             color = new Color32(0xFF, 0xE0, 0x66, 0xFF), count = 8, speed = 1.6f,
             gravity = -1.2f, duration = 0.6f, dotSize = 0.11f,
         };
+        // P3-Phase 17 live-verify finding C: planting was the only farm action with
+        // zero visual confirmation — a leafy-green upward burst, distinct from till's
+        // dirt-brown and water's blue.
+        static readonly Spec PlantSpec = new Spec
+        {
+            color = new Color32(0x6B, 0xC7, 0x4A, 0xFF), count = 6, speed = 1.2f,
+            gravity = -0.8f, duration = 0.5f, dotSize = 0.09f,
+        };
 
-        /// <summary>Fire-and-forget burst at a plot's world position for a farm action.
-        /// Unknown actions (e.g. "plant") are ignored — no burst defined for them.</summary>
+        /// <summary>Fire-and-forget burst at a plot's world position for a farm action.</summary>
         public static void Spawn(string action, Vector3 position)
         {
             Spec spec = action switch
@@ -44,6 +51,7 @@ namespace CosmicBloom.Farming
                 "till" => TillSpec,
                 "water" => WaterSpec,
                 "harvest" => HarvestSpec,
+                "plant" => PlantSpec,
                 _ => default,
             };
             if (spec.count <= 0) return;

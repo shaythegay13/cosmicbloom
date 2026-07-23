@@ -93,5 +93,20 @@ namespace CosmicBloom.World
             EnsureViewsForAllPlots();
             return done > 0;
         }
+
+        /// <summary>What tapping this world point would do right now — "till"/"plant"/
+        /// "water"/"harvest", or null if nothing (bare non-tillable ground, or a plot
+        /// mid-growth with no action available). Drives <see cref="Farming.FarmActionPrompt"/>
+        /// (P3-Phase 17 live-verify finding D). Deliberately checks IsTillable for bare
+        /// ground rather than trusting FarmingSystem.ActionFor alone — that method
+        /// returns "till" for ANY untilled cell with no bounds/reserved check, which
+        /// would otherwise mislabel a landmark/plaza tile as tillable.</summary>
+        public string ContextActionAt(Vector3 world)
+        {
+            var c = _grid.WorldToCell(world);
+            bool tilled = _state.FarmFor(RegionId).plots.TryGetValue($"{c.x},{c.y}", out var p) && p.tilled;
+            if (tilled) return _farming.ActionFor(c.x, c.y);
+            return RegionWorldBuilder.IsTillable(c.x, c.y) ? "till" : null;
+        }
     }
 }

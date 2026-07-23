@@ -85,6 +85,7 @@ namespace CosmicBloom.Core
                 MeteorShowerService.Create();
 
                 Hud = UI.HudUI.Create(save.State, Quests, regions);
+                Farming.FarmActionPrompt.Create(Player.transform);
             }
         }
 

@@ -2,6 +2,88 @@
 
 ---
 
+## P3-Phase 17 live-verify UX fixes (2026-07-23)
+
+A real tap-driven end-to-end pass through `PlayerController.OnTapWorld` (not the
+test suite — see the prior session's live-verify report) surfaced five feedback
+gaps in the Phase 17 free-form interaction model. All five fixed in one pass.
+
+**A. Soil quality was invisible.** A wild-tier tilled plot looked pixel-identical
+to a lush-tier one; the only signal was a hidden `soilHealth` number, discoverable
+only after losing a crop to it. `FarmPlot.TilledColorFor(tier)` now tints bare-
+tilled dirt by tier: lush keeps the original rich brown, mid is a desaturated
+brown, wild is a dull gray-brown. Also feeds the fallback tinted-crop-square path
+(when no generated art loaded) so a growing crop's base color reflects its soil
+too. Screenshot: `Logs/ux_A_soil_tiers.png` — three plots side by side (lush/mid/
+wild), visibly distinct with no crop present.
+
+**B. The player fully hid whatever they were standing on.** Interacting requires
+walking to the exact tile center, and the player sprite (`sortingOrder=10`) drew
+over the plot (`sortingOrder=5`) unconditionally — a freshly planted sprout was
+100% invisible while being tended. Fixed by making the plot's sorting order
+dynamic in `FarmPlot.RefreshVisual`: `BaseSortingOrder=5` (below the player) when
+empty/tilled — bare dirt has no height and shouldn't draw over someone walking on
+it — but `CropSortingOrder=11` (above the player) the instant `plot.crop != null`.
+Alpha-blended sprites mean the player still shows through the crop sprite's
+transparent pixels, so this reads as "standing among/behind the plant," not a
+jarring full swap. Screenshot: `Logs/ux_B_sorting.png` — a stage-0 sprout visibly
+poking out around the player, unlike the fully-hidden original bug screenshot.
+
+**C. Planting had zero FX.** `FarmActionEffects.Spawn` had specs for till/water/
+harvest but no case for `"plant"` — the event fired (`FarmingSystem.Fire`
+already called `OnAction` for every action) but nothing rendered. Added
+`PlantSpec` (leafy green, upward drift). Screenshot: `Logs/ux_C_plant_fx.png`,
+captured at a tight zoom (orthographic size 1.0, vs 2.5 for B/E) since the burst
+is caught at spawn instant (no `Update()` tick yet) with all 6 dots still
+clustered at the origin — a wide shot would make that small cluster illegible.
+
+**D. The contextual tap action was a silent guess.** Tapping picks the right
+verb (till/plant/water/harvest) via `FarmingSystem.ActionFor`, but nothing on
+screen said so. New `Farming.FarmActionPrompt` — a world-space `TextMesh` (not a
+Canvas element; it just follows `player.transform` directly, no screen/world
+conversion needed) — shows "Tap to till/plant/water/harvest" based on
+`FarmGrid.ContextActionAt(playerPos)`, a new query added to `FarmGrid`.
+DECISION: `ContextActionAt` deliberately does NOT just call `FarmingSystem
+.ActionFor` for untilled cells — that method returns `"till"` for ANY untilled
+cell with no bounds/reserved check (fine for its original caller, which only
+ever sees already-in-range gameplay cells), which would have mislabeled a
+landmark/plaza tile as tillable. `ContextActionAt` checks `RegionWorldBuilder
+.IsTillable` for the bare-ground case instead. Created once per player in
+`GameBootstrap` (guarded by `save != null`, same as Hud/Quests). No screenshot
+needed (text-only, verified by a real playthrough-loop test instead).
+
+**E. Harvest rewards only showed as a HUD counter tick, easy to miss.** New
+`FarmingSystem.OnReward` event `(x, y, coins, xp)`, fired alongside the existing
+`OnAction("harvest",...)` inside `Harvest()` — additive, no existing subscriber's
+signature touched. `FarmPlot` subscribes per-plot (matching its own gridX/gridY,
+same pattern as `OnFarmAction`) and spawns `Farming.RewardPopup` — a world-space
+`TextMesh` reading "+Nc  +Nxp" that rises and fades over ~1.1s — at the plot
+itself, in addition to (not instead of) the HUD update. Screenshot:
+`Logs/ux_E_reward_popup.png`.
+
+**Test-hygiene finding, caught and fixed during this pass:** `FarmActionEffects`
+particles and the new `RewardPopup` are deliberately unparented fire-and-forget
+GameObjects (self-destroy after their own short lifetime) — nothing in a region/
+grid teardown cleans them up, since that's never been necessary before. The
+first version of `Phase17UxFeedbackTests` asserted absolute-zero counts before
+each action ("no plant FX before planting") — false whenever an earlier test in
+the same batch run had a still-fading burst/popup on screen. That thrown
+assertion skipped the test's own manual teardown, leaking a stale
+`RegionManager` singleton into the next test and cascading into an unrelated
+screenshot test's failure (`MissingReferenceException`). Fixed by switching to
+delta-based assertions (count-before vs count-after) and adding a
+`ClearFireAndForgetVfx()` sweep at the end of every test that triggers a real
+farm action. Root-caused the SAME session it was introduced, not left for a
+future debugging session.
+
+**Regression:** full suite **89/89** green — `Logs/phase18_nographics.xml` 74/74
++ `Logs/phase18_render.xml` 15/15. Canonical split extended to
+`Logs/phase18_nographics_filter.txt` (74 names, BOM-free) +
+`Logs/phase18_render_names.txt` (15) — includes the prior session's
+`Phase17LiveVerifyTests.FarmLoop_EndToEnd_ThroughRealTaps` (the tap-driven
+live-verify driver), committed alongside this work per its own findings being
+the reason this phase exists.
+
 ## P3-Phase 17 — free-form farm plot placement (2026-07-21)
 
 Replaced the fixed 256-position lush-core grid with free-form placement: tap any

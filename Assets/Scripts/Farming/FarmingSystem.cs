@@ -12,6 +12,10 @@ namespace CosmicBloom.Farming
     {
         readonly GameState _state;
         public event Action<string, int, int> OnAction;   // action, x, y (for FX/SFX/quests)
+        // x, y, coins, xp — fired alongside "harvest" so a FarmPlot can show a floating
+        // reward popup at the plot itself, not just update the HUD counters (P3-Phase 17
+        // live-verify finding E).
+        public event Action<int, int, int, int> OnReward;
 
         public const float SoilRegenPerMinuteFallow = 1.5f;   // fallow plots heal over time
         public const float SoilFloorToPlant = 15f;            // too depleted to plant below this
@@ -117,6 +121,7 @@ namespace CosmicBloom.Farming
             string harvested = plot.crop.id;
             plot.crop = null;
             Fire("harvest", x, y);
+            OnReward?.Invoke(x, y, def.sellPrice, def.xp);
             GameEvents.CropHarvested(harvested, _state.Save.currentRegion);
             GameEvents.RestorationChanged(_state.Save.currentRegion, farm.restoration);
             return true;
