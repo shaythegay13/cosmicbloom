@@ -2,6 +2,55 @@
 
 ---
 
+## Crop-selector verification (2026-07-25)
+
+Investigated whether crop selection was a real limitation before building
+anything: **it wasn't.** `World/CropSelection.cs` (built Phase 3, wired into
+the HUD Phase 9) already tracks a per-region selected crop — not a fixed
+region-default constant — and `FarmPlot.Interact` plants whatever
+`CropSelection.SelectedForPlanting` returns for the current region.
+`HudUI`'s "Crop" bottom-bar button already cycles a region's options via
+`CropSelection.Select`. Starlight Vale carries 10 of the 50 crops.json
+entries (all purchasable, no `heartseed`-style exclusions there). The gap
+was **verification, not UI or data**: the closest prior proof (Phase 3, see
+above) planted 2 different crops across 2 *different* regions, never 2 in
+the *same* region through the selector.
+
+- New test `Assets/Tests/PlayMode/CropSelectorTests.cs` drives the real
+  entry points: `PlayerController.OnTapWorld` for till/plant (Phase 17's
+  established "real tap" precedent), plus — new for this pass — a genuine
+  simulated touchscreen tap on the HUD's actual Crop button through
+  `EventSystem`/`InputSystemUIInputModule` (not a direct method call) to
+  cycle the region's selection. Till+plant plot (4,4) with the default
+  crop, real-tap-cycle the Crop button, till+plant plot (4,6) with the
+  newly-selected crop, assert the two plots hold different crop IDs in the
+  same region. Confirmed: `starlight_berry` → real tap cycles label
+  `Starlight Berry → Wheat` → `wheat`, both `starlight_vale`.
+  `Logs/crop_selector_after_cycle.png` shows both plots (visibly distinct
+  sprouts) and the HUD's Crop button reading "Wheat".
+- **Bug found and fixed, test infra only — not the feature:** `UIRoot`'s
+  `EventSystem` is `DontDestroyOnLoad`, shared across the whole PlayMode
+  suite. When an earlier, non-`InputTestFixture` test creates it first, and
+  this test's `InputTestFixture.Setup()` then swaps in an isolated Input
+  System, the persisted `EventSystem`'s `InputSystemUIInputModule` goes
+  stale — simulated touches silently stop reaching the UI raycaster (passed
+  standalone, failed once folded into the full suite: label never changed
+  from "Starlight Berry"). Fix: the test's `Setup()` now destroys any
+  pre-existing `EventSystem` before `HudUI.Create` (via `UIRoot.Canvas`)
+  recreates one inside its own isolated environment — matches standalone
+  behavior exactly. Scoped to this test only; `UIRoot.cs` untouched.
+- Full regression, reusing P3-Phase 18's canonical filter lists as the base
+  (most recent on disk) plus this one new render test: nographics
+  `Logs/regression_nographics.xml` **85/85**, render
+  `Logs/regression_render2.xml` **18/18**. New canonical filters saved:
+  `Logs/cropselector_nographics_filter.txt` (85, unchanged from P3-Phase 18)
+  and `Logs/cropselector_render_filter.txt` / `_render_names.txt` (18,
+  P3-Phase 18's 17 + `CropSelectorTests`).
+
+**Crop-selector verification: COMPLETE ✅**
+
+---
+
 ## P3-Phase 18 — livestock vs. companions (2026-07-25)
 
 Splits the 15 animals into two roles with genuinely different behavior:
