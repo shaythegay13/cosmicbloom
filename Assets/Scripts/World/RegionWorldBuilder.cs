@@ -44,6 +44,20 @@ namespace CosmicBloom.World
         /// <summary>World-space origin of a region by its index in regions.json order.</summary>
         public static Vector3 OriginOf(int regionIndex) => new(regionIndex * Spacing, 0f, 0f);
 
+        /// <summary>Center of region-local cell (x,y) in world space, given the region's
+        /// bounds center. Derives from Size, so it follows any future region resize.
+        /// Matches Grid.GetCellCenterWorld for the unit-cell grids RegionWorldBuilder
+        /// builds — used where only a Bounds is on hand and no Grid reference is
+        /// (AnimalSpawner placement, P3-Phase 18).</summary>
+        public static Vector3 CellCenterWorld(Vector3 regionCenter, int x, int y) =>
+            regionCenter + new Vector3(x + 0.5f - Size / 2f, y + 0.5f - Size / 2f, 0f);
+
+        /// <summary>Inverse of <see cref="CellCenterWorld"/>: which region-local cell a
+        /// world point falls in. Not clamped — callers check InBounds/IsTillable.</summary>
+        public static Vector2Int WorldToCell(Vector3 regionCenter, Vector3 world) => new(
+            Mathf.FloorToInt(world.x - regionCenter.x + Size / 2f),
+            Mathf.FloorToInt(world.y - regionCenter.y + Size / 2f));
+
         /// <summary>Build every region's Grid+Tilemap and register bounds. Returns grids by region id.</summary>
         public static Dictionary<string, Grid> BuildAll(RegionManager regions)
         {

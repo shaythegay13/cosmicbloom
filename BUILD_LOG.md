@@ -2,6 +2,164 @@
 
 ---
 
+## P3-Phase 18 — livestock vs. companions (2026-07-25)
+
+Splits the 15 animals into two roles with genuinely different behavior:
+LIVESTOCK extend Phase 17's free-placement model to creatures; COMPANIONS ride
+Phase 16's NPC daily-schedule + dialogue infrastructure.
+
+### Roster — user-approved, and it disagrees with the data
+
+`animals.json` already carried a `kind` field (`livestock` | `pet` | `helper`).
+The approved split **deliberately diverges from it in four places**; the conflict
+was raised before any code was written rather than silently resolved:
+
+| animal | data `kind` | has produce | Phase 18 role |
+|---|---|---|---|
+| comet_duck | livestock | yes (comet_egg 45m) | **Companion** |
+| bee_swarm | helper | yes (star_honey 90m) | **Livestock** |
+| butterfly_swarm | helper | no | **Livestock** |
+| firefly_swarm | helper | no | **Livestock** |
+
+Final buckets — Livestock (8): chicken, sheep, asteroid_pig, crater_goat,
+nebula_cow, bee_swarm, butterfly_swarm, firefly_swarm. Companions (7):
+comet_duck, moon_rabbit, biolume_fox, cosmic_tortoise, glow_axolotl, star_owl,
+star_slime.
+
+**DECISION — role is a code-side table, `kind` is left alone.**
+`World/AnimalRoles.cs`, same pattern as `ExploreTargets`, `NpcSchedule` and
+`AnimalSpawner.ExclusiveRegionByAnimal`. Rewriting `kind` to match would have
+destroyed the pet-vs-helper distinction (which the two-way split flattens) for
+no gain. So `kind` stays **descriptive**, `AnimalRole` is **behavioral**.
+Companions are the enumerated set; anything else defaults to Livestock, so a
+future animals.json entry can't silently inherit a schedule it has no dialogue
+for.
+
+**DECISION — the split is BEHAVIORAL, NOT ECONOMIC.** (Item 3 of the spec, and
+the one thing it insisted not be left ambiguous.) Companions are **not** stripped
+of income: any produce their data defines keeps working exactly as Phase 4b /
+Phase 8 defined it (per-species clock, one stream per purchase). Two of the
+seven produce — star_slime (stardust 120m) and comet_duck (comet_egg 45m); the
+other five are pure social/character value. The alternative — zero-economy
+companions — would have deleted two live income streams and one item from a
+shipped economy purely to enforce a category boundary nothing in the game needs.
+**No produce data changed in this phase.** `AnimalController.Interact` collects
+ready produce first for *either* role, and only then branches to the companion
+dialogue line.
+
+### Livestock — free placement
+
+**DECISION — livestock place on OPEN GROUND, not on tilled soil.** A cell is
+valid when `RegionWorldBuilder.IsTillable(x,y)` (in-bounds AND unreserved — the
+exact same gate Phase 17 uses for crops, so creatures and crops share one
+definition of "real ground"), AND holds no tilled plot, AND holds no other
+animal. Requiring tilled soil was rejected because (a) a tilled cell already
+owns a `FarmPlot` collider that claims the tap for plant/water/harvest, so an
+animal there would be unreachable; (b) making pasture compete with crops for
+cells manufactures a resource conflict the design never asked for; (c) livestock
+on open pasture is the genre-natural read. Soil tier is ignored entirely — unlike
+a crop, an animal has no soil-quality dimension, so all three tiers place equally.
+
+Save gained one additive field (schema stays 2, no migration — every pre-Phase-18
+save simply has it empty and falls back to the deterministic paddock spot):
+`animalPlacements`, `"regionId:animalId"` → `"x,y"`. Capped at 15 animals × 5
+regions, so it can't threaten `validateSnapshot`'s 300KB snapshot limit.
+Placement is **per region**, which leaves Phase 4b completely intact: a shared
+animal still spawns one instance in every eligible region, and each can be
+positioned independently.
+
+UX mirrors Phase 17's tap-to-till: `RanchUI` tapping an owned livestock entry
+arms `AnimalPlacement` and closes the panel; the next world tap places it
+(`PlayerController.OnTapWorld` checks the armed state before its interact/till
+branches). Placement resolves where you tapped rather than walking there first —
+it is a management action, not a physical one.
+
+### Companions — Phase 16's schedule, reused not reimplemented
+
+`World/CompanionSchedule.cs` delegates the period→stop mapping and the plaza
+offset to `NpcSchedule`, so a future region resize or plaza move updates people
+and pets together. Animals have no `activeAt` field, so every companion is
+treated as `"any"` — awake across the whole day, giving the 4-stop day
+Work/Social/Work/Home. `AnimalController` snaps to the current stop on spawn and
+walks (`walkSpeed` 1.3, a touch slower than NPCs' 1.6) on later transitions,
+exactly like `NpcController`.
+
+Two companion-specific bits of geometry, both forced by real test failures:
+- **Companions stand on their own ring, inside the human one** (`RadiusFactor`
+  0.9 → Home 12.96 / Work 8.55; plaza scatter 1.4 vs the NPCs' 2.5). A phase
+  offset alone was *not* enough: with 7 companions against 10 NPC slots the
+  bearings inevitably near-coincide — companion 4 landed **0.16 units** from NPC
+  slot 8, i.e. visually stacked, the exact Phase 16 playtest bug. Separate radii
+  make the separation structural instead of arithmetic luck.
+- **Companion wander radius is 0.6, not livestock's 2.2.** Caught by the
+  screenshot test: with stops only ~4.4 units apart, a 2.2-unit idle wander could
+  put a pet in nearly the same place morning and night, making the schedule
+  unreadable — the whole point of giving it one. Livestock keep the roomy
+  original paddock amble.
+
+**DATA GAP (flagged exactly as Phase 16 flagged schedule-aware NPC dialogue, not
+filled with invented content):** `animals.json` has **no dialogue field of any
+kind** — no `intro`/`idle` keys like `npcs.json`, nothing keyed by time or
+location. The only authored per-animal prose is `notes`, so a companion's
+dialogue line **is** its `notes` text, shown as an observation. The intro-vs-idle
+split is already tracked in `AnimalController` (`_metCompanions`); it simply has
+nothing distinct to say yet. If animals.json ever grows a `dialogue` object, wire
+it in `AnimalController.CompanionLine()`.
+
+### Bugs found and fixed during verification (not assumed working)
+
+1. **NRE on every animal spawn** — `OnEnable` fires during
+   `AddComponent<AnimalController>()`, *before* `Spawn` assigns `Def`, so
+   `IsCompanion` dereferenced a null `Def`. Guarded, plus an explicit
+   `Subscribe()` once `Def` is set. Killed 4 tests.
+2. **Companion/NPC bearing collision** — see the ring-radius decision above.
+3. **Companion wander swamping the schedule** — see the wander-radius decision.
+4. `RegionWorldBuilder.CellCenterWorld/WorldToCell` agree with Unity's `Grid` in
+   XY but deliberately keep z on the region plane (Unity centers cells in z too);
+   asserted explicitly rather than papered over.
+
+### Verification evidence
+
+- `Logs/p18_compile.log` — clean compile, exit 0, zero `error CS`
+  (`Logs/p18_baseline_compile.log` established a clean baseline first, since the
+  tree carried an unrelated uncommitted WIP).
+- `Logs/p18_split_nographics.xml` — **85/85 passed**, exit 0.
+- `Logs/p18_split_render.xml` — **17/17 passed**, exit 0. (102 total.)
+- Screenshots, both visually reviewed, not just asserted:
+  - `Logs/phase18_livestock_placed.png` — chicken placed in the lush core (21,20),
+    sheep out on the mid ring (32,7): two different tiers, neither a paddock spot.
+  - `Logs/phase18_companion_morning_work.png` / `Logs/phase18_companion_night_home.png`
+    — the same moon_rabbit at its Work stop in daylight and its Home stop at night.
+
+### Filter-list finding (fixed here)
+
+CLAUDE.md pointed at `phase16_*` as canonical, but **Phase 17 had already
+written newer lists** (`phase17_nographics_filter.txt`, 69 names) *and* those
+still didn't contain any `Phase17*` test — Phase 17's own tests were only ever
+verified in ad-hoc runs, and two Phase-16-era names
+(`FarmLoopTests.FarmGrid_TapInteraction_TwoPlotsInTwoRegions`,
+`Phase15WorldResizeTests.FarmGrid_Populates256PlotViews`) had been renamed and
+were silently matching nothing. New canonical lists
+`Logs/phase18_nographics_filter.txt` (85 names) + `Logs/phase18_render_names.txt`
+(17 names) fix all of it: every name resolves (85 filtered → 85 ran), and the 5
+nographics + 2 render Phase 17 tests are now actually in the regression.
+
+### Not mine, left alone (flagged)
+
+The working tree already carried an **uncommitted** WIP from a prior session —
+`World/MovementAnimator.cs` (sprites moved to a child `Visual` node on player +
+NPCs) and `Tests/PlayMode/CropSelectorTests.cs`. Untouched and not committed
+here. For the record, `CropSelectorTests.TwoDifferentCropsPlantableInSameRegion_
+ViaRealCropButtonTap` **fails** in its own `[TearDown]` with
+`MissingReferenceException: RegionManager has been destroyed`
+(`Logs/p18_cropselector_inherited.xml`) — a test-hygiene bug in that WIP,
+independent of Phase 18, and deliberately not in the canonical filter lists since
+the file isn't committed.
+
+**P3-Phase 18: COMPLETE ✅**
+
+---
+
 ## P3-Phase 17 live-verify UX fixes (2026-07-23)
 
 A real tap-driven end-to-end pass through `PlayerController.OnTapWorld` (not the

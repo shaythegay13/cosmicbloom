@@ -59,8 +59,18 @@ namespace CosmicBloom.UI
             for (int i = 0; i < animals.Count; i++)
             {
                 var def = animals[i];
+                // Unowned -> buy. Owned livestock -> arm place mode and close the panel
+                // so the next world tap positions it (P3-Phase 18). Owned companions
+                // aren't placeable — they walk a schedule.
                 var button = UIRoot.MakeButton(_panel.transform, $"Animal_{def.id}", "",
-                    () => { AnimalSpawner.TryBuy(_state, _regions, def.id); Refresh(); }, 18);
+                    () =>
+                    {
+                        if (!_state.Save.animals.Contains(def.id))
+                            AnimalSpawner.TryBuy(_state, _regions, def.id);
+                        else if (AnimalPlacement.Arm(def.id))
+                            _panel.SetActive(false);
+                        Refresh();
+                    }, 18);
                 var brt = (RectTransform)button.transform;
                 float top = 0.925f - i * 0.0585f;
                 brt.anchorMin = new Vector2(0.04f, top - 0.052f);
@@ -85,9 +95,13 @@ namespace CosmicBloom.UI
             foreach (var (def, label) in _entries)
             {
                 bool owned = _state.Save.animals.Contains(def.id);
+                // P3-Phase 18: show the behavioral role, not animals.json's descriptive
+                // `kind` — the role is what tells the player whether they can place it.
+                string role = AnimalRoles.IsCompanion(def.id) ? "companion" : "livestock";
                 label.text = owned
-                    ? $"  ✓ {def.name} ({def.kind}) — produces {def.produce ?? "joy"}"
-                    : $"  {def.name} ({def.kind}) — {def.cost}c, Lv {def.unlockLevel}" +
+                    ? $"  ✓ {def.name} ({role}) — produces {def.produce ?? "joy"}" +
+                      (AnimalRoles.IsLivestock(def.id) ? "  [tap to place]" : "  [walks its own day]")
+                    : $"  {def.name} ({role}) — {def.cost}c, Lv {def.unlockLevel}" +
                       (_state.Save.level >= def.unlockLevel && _state.Save.coins >= def.cost ? "  [tap to buy]" : "");
             }
         }

@@ -2,6 +2,7 @@
 // (project has activeInputHandler=1; legacy Input throws here).
 // Tap empty ground: walk there (clamped to current region bounds).
 // Tap an IInteractable: interact if in range, else walk over and interact on arrival.
+using CosmicBloom.Save;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -53,6 +54,27 @@ namespace CosmicBloom.World
         public void OnTapWorld(Vector3 world)
         {
             world.z = 0f;
+
+            // Livestock place mode (P3-Phase 18) takes the tap before anything else —
+            // while armed from RanchUI, the next ground tap positions the animal.
+            // Placement is a management action, so it resolves where you tapped rather
+            // than walking there first (unlike the free-form till below).
+            if (AnimalPlacement.IsArmed && RegionManager.Instance != null)
+            {
+                string regionId = RegionManager.Instance.CurrentRegionId;
+                if (RegionManager.Instance.TryGetBounds(regionId, out var rb))
+                {
+                    var c = RegionWorldBuilder.WorldToCell(rb.center, world);
+                    string animalId = AnimalPlacement.Armed;
+                    bool placed = AnimalSpawner.TryPlace(
+                        SaveManager.Instance != null ? SaveManager.Instance.State : null,
+                        RegionManager.Instance, regionId, animalId, c.x, c.y);
+                    if (placed) AnimalPlacement.Disarm();
+                    else Debug.Log($"[Player] cannot place {animalId} at ({c.x},{c.y})");
+                    return;
+                }
+            }
+
             var hit = Physics2D.OverlapPoint(world);
             var interactable = hit != null ? hit.GetComponentInParent<IInteractable>() : null;
 
@@ -142,7 +164,14 @@ namespace CosmicBloom.World
         {
             var go = new GameObject("Player");
             go.transform.position = position;
-            var sr = go.AddComponent<SpriteRenderer>();
+
+            // Sprite lives on a child "Visual" node, not the root, so MovementAnimator's
+            // bob/squash-stretch (below) never perturbs transform.position — the value
+            // MoveStep, camera follow, and interactRange checks all read.
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(go.transform, false);
+
+            var sr = visual.AddComponent<SpriteRenderer>();
             var generated = GeneratedSprites.Player();
             sr.sprite = generated != null ? generated : ProceduralSprites.Capsule();
             sr.color = generated != null
@@ -151,6 +180,10 @@ namespace CosmicBloom.World
             sr.sortingOrder = 10;
             var mat = ProceduralSprites.LitMaterial;
             if (mat != null) sr.sharedMaterial = mat;   // 2D-lit so day/night lighting applies
+
+            var anim = go.AddComponent<MovementAnimator>();
+            anim.visual = visual.transform;
+
             return go.AddComponent<PlayerController>();
         }
     }

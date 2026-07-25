@@ -66,6 +66,12 @@ namespace CosmicBloom.Core
         public List<string> cosmeticsOwned = new();
         public List<string> heldItems = new();               // deliver-step quest items (e.g. sealed_crate)
         public Dictionary<string, FarmState> farms = new();
+        // P3-Phase 18 free-form livestock placement (additive field, schema stays 2):
+        // "regionId:animalId" -> "x,y" region-local cell. Absent entry = the animal
+        // sits at its deterministic paddock spot, which is every pre-Phase-18 save.
+        // Capped at 15 animals x 5 regions, so it can't threaten validateSnapshot's
+        // 300KB snapshot limit.
+        public Dictionary<string, string> animalPlacements = new();
         public int worldVersion;          // world-layout generation (additive field, schema stays 2);
                                           // 0 = pre-resize 20x20 world — see Save.SaveMigration
 
