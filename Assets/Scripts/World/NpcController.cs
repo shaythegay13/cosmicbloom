@@ -42,7 +42,13 @@ namespace CosmicBloom.World
             go.transform.position = regionCenter +
                 new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
 
-            var body = go.AddComponent<SpriteRenderer>();
+            // Sprite (+ accent chip) lives on a child "Visual" node, not the root, so
+            // MovementAnimator's bob/squash-stretch never perturbs transform.position —
+            // the value schedule-walking, the collider, and InteractPosition all read.
+            var visual = new GameObject("Visual");
+            visual.transform.SetParent(go.transform, false);
+
+            var body = visual.AddComponent<SpriteRenderer>();
             var mat = ProceduralSprites.LitMaterial;
 
             // Real generated art if it loaded (Tools/art/build-cosmic.mjs output) — a
@@ -64,7 +70,7 @@ namespace CosmicBloom.World
             if (!usingGenerated)
             {
                 var accentGo = new GameObject("Accent");
-                accentGo.transform.SetParent(go.transform, false);
+                accentGo.transform.SetParent(visual.transform, false);
                 accentGo.transform.localPosition = new Vector3(0f, 0.62f, 0f);
                 accentGo.transform.localScale = Vector3.one * 0.28f;
                 var accent = accentGo.AddComponent<SpriteRenderer>();
@@ -84,6 +90,10 @@ namespace CosmicBloom.World
             npc._regionCenter = regionCenter;
             npc._ringAngle = angle;
             InteractionCue.Attach(go, CueColor);
+
+            var anim = go.AddComponent<MovementAnimator>();
+            anim.Init(visual.transform);
+
             npc.ApplyTimeOfDay();
 
             // P3-Phase 16: start the day already at the current schedule stop

@@ -78,18 +78,18 @@ namespace CosmicBloom.Tests
             Debug.Log($"[P5Test] plot (16,16) shows generated sprite for {crop.id}@{plot.crop.stage}");
 
             var npc = _npcs.First(n => n.Def.region == "starlight_vale");
-            var npcBody = npc.GetComponent<SpriteRenderer>();
+            var npcBody = npc.GetComponentInChildren<SpriteRenderer>();
             var expectedNpcSprite = GeneratedSprites.Npc(npc.Def.id);
             Assert.IsNotNull(expectedNpcSprite, $"generated sprite exists for npc {npc.Def.id}");
             Assert.AreSame(expectedNpcSprite, npcBody.sprite,
                 "npc renders the real generated portrait, not the placeholder capsule");
-            Assert.IsNull(npc.transform.Find("Accent"), "generated-art NPCs skip the placeholder accent chip");
+            Assert.IsNull(npc.transform.Find("Visual/Accent"), "generated-art NPCs skip the placeholder accent chip");
             Debug.Log($"[P5Test] npc {npc.Def.id} shows generated sprite");
 
             // Player (P3 stopgap, 2026-07-10): procedural full-body character from
             // the same pipeline, wired via the same real-art/fallback pattern.
             var player = PlayerController.Spawn(new Vector3(20f, 14f, 0f));
-            var playerSr = player.GetComponent<SpriteRenderer>();
+            var playerSr = player.GetComponentInChildren<SpriteRenderer>();
             var expectedPlayerSprite = GeneratedSprites.Player();
             Assert.IsNotNull(expectedPlayerSprite, "generated player sprite exists");
             Assert.AreSame(expectedPlayerSprite, playerSr.sprite,

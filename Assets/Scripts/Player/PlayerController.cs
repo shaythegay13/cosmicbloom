@@ -182,7 +182,7 @@ namespace CosmicBloom.World
             if (mat != null) sr.sharedMaterial = mat;   // 2D-lit so day/night lighting applies
 
             var anim = go.AddComponent<MovementAnimator>();
-            anim.visual = visual.transform;
+            anim.Init(visual.transform);
 
             return go.AddComponent<PlayerController>();
         }

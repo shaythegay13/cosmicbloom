@@ -78,7 +78,7 @@ namespace CosmicBloom.Tests
             var farming = new FarmingSystem(state);
             FarmGrid.Create("starlight_vale", grids["starlight_vale"], farming, state);
             var player = PlayerController.Spawn(new Vector3(20, 20));
-            int playerOrder = player.GetComponent<SpriteRenderer>().sortingOrder;
+            int playerOrder = player.GetComponentInChildren<SpriteRenderer>().sortingOrder;
 
             farming.Till(20, 20);
             var plot = GameObject.Find("Plot_20_20").GetComponent<FarmPlot>();

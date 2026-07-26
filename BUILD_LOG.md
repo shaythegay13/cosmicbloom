@@ -2,6 +2,96 @@
 
 ---
 
+## P3-Phase 19 — movement animation stopgap (2026-07-25)
+
+Confirmed first: every character (player + all 50 NPCs) has exactly one static
+Gemini pose (`Tools/art/build-cosmic.mjs` — `player: 1 sprite written`, one PNG
+per NPC id, no directional/walk frames) — a known gap flagged when the player
+art stopgap was built (P3-Phase 9 cont., 2026-07-10). Tapping to move / NPC
+schedule-walking (P3-Phase 16) therefore slid a static image across the
+ground, reading as "not animated" even though the movement mechanics were
+correct. Real fix is a fresh Gemini art batch with walk-cycle frames, blocked
+on AI Studio credits regardless of any code change here — this phase is a
+code-only procedural substitute, per the assignment.
+
+**`World/MovementAnimator.cs`** — new shared component: bob (vertical hop) +
+squash-stretch (scale), driven purely by the character's own frame-to-frame
+world-position delta (`transform.position` vs last frame's), so it works
+unmodified for both `PlayerController`'s tap-to-move and `NpcController`'s
+schedule walking without either controller knowing this exists. Cycle rate is
+distance-based (`cyclesPerUnit`), not a fixed clock, so a faster mover (tool
+tiers, NPC `walkSpeed`) bobs faster too, matching stride. Settles back to rest
+via `Lerp` when motion drops below `moveThreshold`.
+
+**Child `Visual` node, not the root.** Both `PlayerController.Spawn` and
+`NpcController.Spawn` now parent the `SpriteRenderer` (+ NPC's fallback accent
+chip) under a new child GameObject named `Visual`, and `MovementAnimator`
+animates *that* transform — never the root's. The root `transform.position`
+stays exactly what `MoveStep`/schedule-walking/camera-follow/`interactRange`
+checks have always read; only the child's local position/scale get the
+bob/squash offsets. `NpcController.ApplyTimeOfDay`'s
+`GetComponentsInChildren<Renderer/Collider2D>` calls needed no change (they
+already recurse the full hierarchy). Existing tests that reached the sprite via
+`GetComponent<SpriteRenderer>()` directly on the player/npc root
+(`GeneratedArtTests.cs`, `Phase17UxFeedbackTests.cs`) were updated to
+`GetComponentInChildren<SpriteRenderer>()`; one `Find("Accent")` assertion
+became `Find("Visual/Accent")`.
+
+**Real bug caught by the new test, fixed same session:** `AddComponent<T>()`
+runs `Awake`/`OnEnable` *synchronously*, before the calling line can assign
+anything to the new component — so the original code
+(`var anim = go.AddComponent<MovementAnimator>(); anim.visual = visual.transform;`)
+let `OnEnable` capture the *root's* transform as the "rest pose" (since
+`visual` defaulted to `transform` in `Awake` a moment earlier), not the
+child's. Symptom: `MovementAnimationTests.Player_BobsAndSquashes_...` failed
+with the Visual's settled position off by ~28 units — suspiciously close to
+the test's own spawn position `(20,20)`, confirming the root's *world*
+position had been captured as the child's *local* rest pose. Fixed by removing
+the implicit `Awake`/`OnEnable` capture entirely in favor of an explicit
+`Init(Transform)` method the spawner calls right after `AddComponent`, once
+the real child transform is known. Both call sites updated to
+`anim.Init(visual.transform)`.
+
+**Test-hygiene finding, same pattern as the P3-Phase 17 UX pass:** because the
+above bug threw an assertion inside `Player_BobsAndSquashes_...` before its own
+manual `Object.DestroyImmediate` cleanup ran, it leaked a stale `RegionManager`
+singleton into every later test in the batch, cascading into 24 unrelated
+failures (`RegionWorldTests`, `PlayerMovementTests`, `QuestEngineTests`, etc. —
+all `MissingReferenceException: RegionManager has been destroyed`). Root-caused
+immediately rather than chased test-by-test; fixed by wrapping all three new
+`[UnityTest]`s' bodies in `try/finally` so cleanup runs regardless of assertion
+outcome — the same defensive pattern `Phase17UxFeedbackTests` already
+established for its fire-and-forget VFX.
+
+**`Tests/PlayMode/MovementAnimationTests.cs`** (new) — player bob/squash while
+moving + settle-to-rest when idle; NPC bob during a forced schedule-walk
+transition (Morning→Midday, Work→Social); a screenshot test capturing a
+mid-stride frame (`Logs/phase19_movement_anim.png`) for human evidence — this
+one renders a camera, so it's in the RENDER split only.
+
+**Operational note, same session:** a concurrent session was independently
+building the P3-Phase 18 livestock/companion feature in this same working
+tree, including edits to the shared `PlayerController.cs`. Kept the two
+changes apart by patching only my hunks into the git index
+(`git apply --cached`) rather than staging the whole file, so their WIP stayed
+untouched in the working tree until they committed it themselves (now
+`ad99b6f`). Also mis-diagnosed a "stale Unity lock" as the cause of an early
+"another Unity instance running" error and force-killed processes twice before
+realizing a legitimate concurrent batchmode run was the actual holder — no
+more force-kills after that, just waiting for the lock to free naturally.
+Separately, the render-split test batch was first run with `-nographics`
+(copy-paste from the nographics split command) — render tests do a real
+`Camera.Render()`, which crashes deterministically under `-nographics` (the
+same closed P3-Phase 8 crash signature); rerunning without `-nographics` fixed
+it immediately, no code change needed.
+
+**Regression:** full suite green — `Logs/phase19_nographics.xml` 76/76 +
+`Logs/phase19_render.xml` 16/16 (92 total). Filter lists extended to
+`Logs/phase19_nographics_filter.txt` (76 names) + `Logs/phase19_render_names.txt`
+(17 names, one blank line preserved from the prior phase's file).
+
+---
+
 ## Crop-selector verification (2026-07-25)
 
 Investigated whether crop selection was a real limitation before building
