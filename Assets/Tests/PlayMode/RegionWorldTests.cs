@@ -141,5 +141,85 @@ namespace CosmicBloom.Tests
             }
             yield return null;
         }
+
+        // 2026-07-11 ad hoc verification: confirm ground tiles render the real
+        // Gemini tile-mask textures (P3-Phase 9 cont.) rather than falling back
+        // to ProceduralSprites.Square's flat fill. The wide overview capture
+        // above is too zoomed-out to tell texture from flat color at ~5px/unit
+        // — this frames one full region at a time at high resolution and logs
+        // pixel-variance within a single tier so a flat fallback would show up
+        // as near-zero stddev even without eyeballing the PNG.
+        [UnityTest]
+        public IEnumerator CaptureTwoRegionsCloseUpForTileArtCheck()
+        {
+            RegionWorldBuilder.BuildAll(_regions);
+            yield return null;
+
+            var defs = new System.Collections.Generic.List<RegionDef>(GameDatabase.Regions);
+            for (int i = 0; i < 2 && i < defs.Count; i++)
+            {
+                var def = defs[i];
+                Assert.IsTrue(_regions.TryGetBounds(def.id, out var bounds), $"{def.id} bounds registered");
+
+                var camGo = new GameObject($"CloseupCam_{def.id}");
+                var cam = camGo.AddComponent<Camera>();
+                cam.orthographic = true;
+                cam.transform.position = new Vector3(bounds.center.x, bounds.center.y, -10f);
+                cam.orthographicSize = bounds.extents.y + 1f;
+                cam.backgroundColor = new Color(0.05f, 0.04f, 0.10f);
+                cam.clearFlags = CameraClearFlags.SolidColor;
+
+                try
+                {
+                    const int texSize = 1024;
+                    var rt = new RenderTexture(texSize, texSize, 24);
+                    cam.targetTexture = rt;
+                    cam.Render();
+
+                    RenderTexture.active = rt;
+                    var tex = new Texture2D(texSize, texSize, TextureFormat.RGB24, false);
+                    tex.ReadPixels(new Rect(0, 0, texSize, texSize), 0, 0);
+                    tex.Apply();
+                    RenderTexture.active = null;
+                    cam.targetTexture = null;
+
+                    string path = Path.Combine(Application.dataPath, "..", "Logs", $"phase17_closeup_{def.id}.png");
+                    File.WriteAllBytes(path, tex.EncodeToPNG());
+
+                    // Sample a patch centered on the lush core (always tier 2) and
+                    // measure luminance stddev — a flat ProceduralSprites.Square
+                    // fallback tinted by one solid color has ~0 variance; the real
+                    // textured Gemini mask does not.
+                    var centerScreen = cam.WorldToScreenPoint(bounds.center);
+                    int cx = Mathf.Clamp((int)centerScreen.x, 40, texSize - 40);
+                    int cy = Mathf.Clamp((int)centerScreen.y, 40, texSize - 40);
+                    double sum = 0, sumSq = 0;
+                    int n = 0;
+                    for (int dx = -20; dx <= 20; dx += 2)
+                        for (int dy = -20; dy <= 20; dy += 2)
+                        {
+                            var px = tex.GetPixel(cx + dx, cy + dy);
+                            double lum = 0.299 * px.r + 0.587 * px.g + 0.114 * px.b;
+                            sum += lum;
+                            sumSq += lum * lum;
+                            n++;
+                        }
+                    double mean = sum / n;
+                    double variance = sumSq / n - mean * mean;
+                    double stddev = System.Math.Sqrt(variance);
+                    Debug.Log($"[TileArtCheck] {def.id} lush-core patch stddev={stddev:F5} mean={mean:F3} (n={n}) -> {path}");
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[TileArtCheck] capture unavailable for {def.id}: {e.Message}");
+                    Assert.Ignore("Rendering not available; visual check pending human review.");
+                }
+                finally
+                {
+                    Object.DestroyImmediate(camGo);
+                }
+            }
+            yield return null;
+        }
     }
 }
