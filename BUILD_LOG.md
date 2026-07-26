@@ -2,6 +2,45 @@
 
 ---
 
+## Canonical test filters moved into version control (2026-07-25)
+
+Housekeeping, no gameplay change. The two canonical split lists lived in
+`Logs/`, which `.gitignore:19` ignores — `git ls-files Logs` returned 0. So the
+lists that the entire verification discipline depends on were untracked:
+invisible to review, undiffable, absent from a fresh clone, and free to rot
+with nothing to catch it. That is a plausible root cause of the rot history
+already recorded below (the Phase 9/10 lists silently dropping
+Phase8LooseEndTests; the phase16/17 lists carrying two renamed names and
+containing no `Phase17*` test at all).
+
+Moved to **`Tools/testing/`**, now tracked:
+- `Tools/testing/phase18_nographics_filter.txt` (85 names, semicolon-joined, BOM-free)
+- `Tools/testing/phase18_render_names.txt` (18 names, newline-joined)
+
+`Tools/` rather than `Assets/Tests/filters/` because Unity never reads these —
+they are batchmode-runner inputs, and anything under `Assets/` gets imported as
+a TextAsset needing a committed `.meta` (29 such already tracked under
+`Assets/Tests`), plus build-inclusion risk. `Tools/` is the established tracked
+home for dev tooling that is not game content (`Tools/art/`).
+
+Filenames deliberately unchanged. "phase18_" is now a misnomer — these are
+canonical, not a phase artifact, and the render list holds a non-Phase-18 test
+— but renaming would churn every reference in this log for no functional gain.
+Flagged for whenever the next phase touches them.
+
+**Verified from the new location before committing** — not assumed from a path
+edit: `Logs/p20_split_nographics.xml` total=85 passed=85 failed=0, and
+`Logs/p20_split_render.xml` total=18 passed=18 failed=0. Both `total=` match
+their filter's name count, so nothing silently matched zero.
+
+Left alone: `Logs/phase18_only_{nographics,render}.txt` are transient
+Phase-18-only subsets, not canonical, and stay in the ignored `Logs/`.
+The two BUILD_LOG references below to the old `Logs/` paths are dated
+historical records and were accurate when written — appended here rather than
+rewritten, per this log being append-only.
+
+---
+
 ## P3-Phase 19 — movement animation stopgap (2026-07-25)
 
 Confirmed first: every character (player + all 50 NPCs) has exactly one static
