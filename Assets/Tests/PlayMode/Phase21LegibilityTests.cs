@@ -600,14 +600,20 @@ namespace CosmicBloom.Tests
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 yield return null;
 
+                // This shot's subject is the two WORLD-SPACE indicators (quest "!" and the
+                // produce sparkle), which are sprites and render straight into the
+                // RenderTexture. Since P3-Phase 22 the context prompt is Canvas UI instead
+                // of world-space TextMesh, so it is deliberately NOT in this frame — an
+                // Overlay canvas cannot render into a RenderTexture at all. The prompt's
+                // own evidence is Phase22PromptLegibilityTests, which captures it at the
+                // shipped ortho 14 with the canvas bound to the capture camera.
                 Capture(cam, 720, 720, "phase21_world_indicators.png");
 
                 // -- HUD + Star Map, with a landmark already restored so both states show.
                 // The world actors are hidden first: this capture forces the canvas to
-                // ScreenSpaceCamera (Overlay canvases don't render into a RenderTexture),
-                // which lets world-space TextMesh draw over the panel. In the real game
-                // the canvas is Overlay and always wins, so leaving them visible would put
-                // an artifact in the evidence that the shipping build never shows.
+                // ScreenSpaceCamera so it renders into the RenderTexture at all, and with
+                // the actors visible the panel would sit over a scene the Star Map covers
+                // completely in the real game.
                 prompt.gameObject.SetActive(false);
                 player.gameObject.SetActive(false);
                 giver.gameObject.SetActive(false);

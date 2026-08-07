@@ -2,6 +2,182 @@
 
 ---
 
+## P3-Phase 22 — context prompt moved from world-space TextMesh to Canvas UI (2026-08-07)
+
+Reported from a direct screenshot: the player-following context prompt (the crop
+info line especially) was fuzzy and illegible, while HUD/bottom-bar text in the
+**same shot** was crisp.
+
+### Item 1 — which rendering path was it actually on? (asked before fixing anything)
+
+Both halves of the premise checked out, and they turned out to be the same fact
+seen from two sides:
+
+- **The prompt was world-space `TextMesh`.** `FarmActionPrompt` built two
+  `TextMesh` components (P3-Phase 17's verb, P3-Phase 21's info line) on a bare
+  GameObject that tracked the player's transform. Not on a canvas at all.
+- **Tier 1's "Canvas UI is immune to zoom" claim was correct but under-tested.**
+  P3-Phase 20 verified *sprite* legibility (`SpriteFootprint_StaysAboveLegibilityFloor`,
+  44px floor) and asserted UI immunity structurally — `UIRoot` is
+  ScreenSpaceOverlay + ScaleWithScreenSize, so it cannot see the camera. Nothing
+  had ever measured **text** at the new ortho 14. The gap was real, and the
+  fuzzy text was sitting in it.
+
+**Root cause, with numbers.** A `TextMesh` glyph is `fontSize * characterSize * 0.1`
+world units tall, and a 1280px portrait frame at ortho *S* has `1280/(2S)` px per
+unit. So P3-Phase 20's retune (ortho 7 → 14) silently **halved both lines**:
+
+| line | charSize | @ ortho 7 (pre-P20) | @ ortho 14 (shipped) |
+|---|---|---|---|
+| verb | 0.11  | 48.3 px | **24.1 px** |
+| info | 0.055 | 24.1 px | **12.1 px** |
+
+12px, rasterised from a 48px font atlas — a **0.25x minification**. That is the
+reported fuzz, and it is not a font-size bug: it is bilinear-minified atlas text.
+P3-Phase 21 had deliberately set the info line to *half* the verb's size to stop
+it running off both edges of the frame, which landed it squarely in this hole.
+
+### Item 2 — converted to a Canvas element, not a bigger font
+
+A larger `characterSize` would still be minified atlas text and would break again
+on the next zoom change — and **pinch-zoom is already queued**, which makes that
+a certainty, not a risk. So the *rendering path* changed.
+
+Both lines are now `UnityEngine.UI.Text` parented to `UIRoot.Canvas`.
+
+> **Deviation from the request, flagged:** the ask said "TextMeshProUGUI, matching
+> whatever the rest of UIRoot already uses". Those two clauses conflict — the rest
+> of UIRoot uses **legacy uGUI `Text`** via `UIRoot.MakeText` (HudUI, DialogueUI,
+> QuestLogUI, RegionMapUI, PauseMenuUI, RanchUI, all on `LegacyRuntime.ttf`), and
+> TMP's essential resources are **not imported** into this project (no
+> `Assets/TextMesh Pro/`), so `TextMeshProUGUI` would render nothing at runtime.
+> Went with `UIRoot.MakeText` — the "matching what UIRoot uses" clause. Adopting
+> TMP is a viable separate change (it would need TMP Essentials imported and every
+> other UI surface migrated for consistency); it is not needed for this fix, since
+> zoom-immunity comes from the Canvas, not from TMP.
+
+Design points worth keeping:
+
+- **Type size is in CanvasScaler reference px** (1080x1920), so it is a fixed
+  fraction of screen height on every device and unrelated to `orthographicSize`.
+  Verb **40**, info **30**. Derived, not taste: the floor is `HudUI`'s stats size
+  (**26**) — the element confirmed crisp in the very screenshot that showed this
+  label as fuzzy, so it is the project's own demonstrated floor rather than an
+  imported number. Both ship above it (`LegibilityFloorFontSize` names it).
+- **Only the anchor reads the camera.** `FollowPlayer()` projects the player's
+  head (`+0.5` units — 64px art at PPU 64) through `Camera.main` and converts to
+  canvas space via `RectTransformUtility.ScreenPointToLocalPointInRectangle`. The
+  offset is world-derived so it tracks the sprite as zoom changes, with a
+  **34px canvas floor** (`MinHeadroomPx`) so a far-zoomed-out view can't collapse
+  it and print the label over the character. Type size never touches the camera.
+- **Content updates are camera-independent.** Text is written before
+  `FollowPlayer()` and unconditionally, so the several PlayMode tests that spawn
+  no camera still exercise the verb/info contracts.
+- **`raycastTarget = false` on both lines, and the root is a bare `RectTransform`.**
+  Load-bearing: a `Graphic` over the play area would eat the ground taps this
+  label exists to prompt for.
+- **`SetAsFirstSibling()`.** `GameBootstrap` builds the HUD *before* the prompt,
+  so without an explicit reorder this would draw on top of the bottom button bar.
+- **Overflow, not best-fit — a deliberate deviation from the Phase 6 rule.** That
+  rule exists because `verticalOverflow=Truncate` silently drops real data. This
+  label has no box to fit inside, so it solves the same problem the other way:
+  `Horizontal/VerticalWrapMode.Overflow`, nothing truncated. Best-fit here would
+  re-introduce exactly the failure being fixed — content quietly scaling itself
+  back below legibility.
+
+### Item 3 — screenshot verification at the shipped zoom
+
+`Logs/phase22_prompt_at_ortho14.png` — prompt **and** HUD in one 720x1280 frame at
+`CameraFollow.DefaultOrthographicSize`, i.e. the exact comparison the bug report
+was made from. Both read as crisp. `Logs/phase22_prompt_at_ortho28_zoomed_out.png`
+is the pinch-zoom proof: world art halves, the label is pixel-identical.
+
+Two capture details that would otherwise produce misleading evidence:
+
+- An **Overlay canvas does not render into a RenderTexture**, so the capture flips
+  to `ScreenSpaceCamera`. The shipping build stays Overlay; the prompt reads
+  `renderMode` when projecting, so it follows correctly either way.
+- The RenderTexture is **bound across a frame**, not just for `Render()`. A
+  ScreenSpaceCamera canvas sizes to the camera's `pixelRect`, which only becomes
+  720x1280 once `targetTexture` is assigned — binding it just before `Render()`
+  lays the UI out against the tiny batchmode `Screen` and captures text at the
+  wrong scale. Verified: `canvas.scaleFactor` reads **0.667** in the capture,
+  exactly `sqrt(720/1080)*sqrt(1280/1920)`.
+
+The capture is **conservative**: at 720x1280 the scale factor is 0.667, so the
+30px info line renders at 20px there and at the full 30px on a 1080x1920 device.
+
+Two screenshot-driven fixes the first capture forced (evidence, not taste): both
+lines ran at alpha 0.97 and the info block visibly washed out over bright
+lush-tier ground → full alpha, brighter info colour; and the three info lines
+crowded into one smear → `lineSpacing 1.18` plus the block pushed from
+`VerbFontSize*1.35` to `*1.7` to clear the verb's ascenders. A dark `Outline`
+(`LegibilityInk`, 2px) sits behind both lines — size alone doesn't make text
+readable over moving world art, and the old TextMesh had no contrast treatment
+either.
+
+### Item 4 — the anti-regression test
+
+`Assets/Tests/PlayMode/Phase22PromptLegibilityTests.cs`, 6 tests:
+
+1. `PromptRendersThroughCanvasUi_NeverWorldSpaceTextMesh` — **the guard.** Zero
+   `TextMesh` *and* zero `MeshRenderer` anywhere in the prompt; both lines are
+   `Text`; parent is `UIRoot.Canvas`, ScreenSpaceOverlay + ScaleWithScreenSize.
+2. `PromptTypeSize_IsInvariantAcrossCameraZoom` — reads the **live component** at
+   ortho 7 / 14 / 28 and requires one distinct size, with the old world-space math
+   computed alongside and pinned (`< 13px` at ortho 14) so the contrast stays on
+   the record. This is the property pinch-zoom depends on.
+3. `PromptTracksThePlayerOnScreen_AtEveryZoom` — camera **pinned**, player walks
+   across the frame. First draft re-centred the camera each step, which put the
+   player at canvas (0,0) every time and made the horizontal assertion pass
+   without tracking anything; caught by reading the logged values, not the asserts.
+4. `PromptNeitherBlocksWorldTapsNorCoversHud` — raycast + sibling-index-0.
+5. `PromptStillReportsRealVerbAndCropInfo` — the P17/P21 content contracts survive
+   the move, asserted with **no camera present**.
+6. `Phase22_PromptLegibility_Screenshots` — RENDER split (calls `Camera.Render()`).
+
+`Phase21LegibilityTests.Phase21_LegibilityScreenshots` was updated: its
+`phase21_world_indicators.png` shot is now explicitly about the two *sprite*
+indicators, since the Canvas prompt cannot appear in a RenderTexture capture of an
+Overlay canvas. Its stale comment about world-space TextMesh drawing over the Star
+Map panel was corrected. Both indicators still verified present in the image.
+
+### Verification
+
+- Compile: `Logs/p22_compile.log`, 0 `error CS`.
+- **Filter diff run mechanically** (never by eye), via a brace-depth C# parser over
+  `Assets/Tests/PlayMode/`: **131 source tests, 131 in filters, 0 missing / 0 dead /
+  0 duplicates.** The parser's first draft used a flat "last class seen" scan and
+  mis-attributed `PlayerMovementTests`' two `TapInteractable*` tests to the nested
+  `FakeInteractable` helper — verified against the source before touching the
+  filters, so the correct existing entries were left alone. **The checker is now
+  committed at `Tools/testing/check-filters.mjs`** (repo-relative, non-zero exit on
+  any discrepancy) — this check had been re-derived ad hoc every time, which is the
+  mechanism behind the three documented rot incidents. Run it; don't rewrite it.
+- Filters updated in place (no phase-prefixed rename): `nographics_filter.txt`
+  103 → **108** (semicolon-joined, BOM-free — appended via `printf`, not
+  PS5.1 `Set-Content -Encoding utf8`), `render_names.txt` 22 → **23**.
+  The 2 camera-creating tests went to the **nographics** split, matching
+  `Phase20CameraFramingTests`' precedent: constructing a `Camera` is safe headless,
+  only `Camera.Render()` is the render-surface crash.
+- Full regression, both splits, **131/131 green**:
+  `Logs/p22_split_nographics.xml` (`total="108" passed="108" failed="0"`) and
+  `Logs/p22_split_render.xml` (`total="23" passed="23" failed="0"`). Filter name
+  count matched `total=` on both runs — the silent-zero-test check.
+
+### Flagged, NOT fixed (out of the requested scope)
+
+`Farming/RewardPopup.cs` is still world-space `TextMesh` (`fontSize 32`,
+`characterSize 0.08` → **~14px at ortho 14**) and has the identical
+zoom-coupling weakness. It was not in scope here (the ask was the
+player-following context prompt) and it is transient rather than always-on, but
+it *will* look wrong at the same zooms and should get the same treatment.
+`FarmActionPrompt` is now the worked example to copy.
+
+**P3-Phase 22: COMPLETE ✅**
+
+---
+
 ## P3-Phase 21 — Tier 2 legibility pass (2026-08-07)
 
 Eight items. Six shipped code, two were investigate-only and are reported here
