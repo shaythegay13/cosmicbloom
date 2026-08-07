@@ -70,6 +70,56 @@ namespace CosmicBloom.World
             return s;
         }
 
+        /// <summary>Exclamation glyph (bar + dot) for the P3-Phase 21 quest-giver
+        /// indicator, white — tint via renderer. Drawn rather than typeset so it
+        /// matches the rest of the placeholder art and needs no font asset.</summary>
+        public static Sprite Bang(int w = 12, int h = 32)
+        {
+            string key = $"bang_{w}x{h}";
+            if (_cache.TryGetValue(key, out var s)) return s;
+
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var clear = new Color(0, 0, 0, 0);
+            float cx = w / 2f;
+            float halfW = w * 0.24f;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    bool bar = Mathf.Abs(x - cx + 0.5f) <= halfW && y >= h * 0.34f && y < h;
+                    bool dot = Mathf.Abs(x - cx + 0.5f) <= halfW && y >= h * 0.04f && y <= h * 0.22f;
+                    tex.SetPixel(x, y, bar || dot ? Color.white : clear);
+                }
+            tex.Apply();
+            s = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 32f);
+            _cache[key] = s;
+            return s;
+        }
+
+        /// <summary>Four-point sparkle for the P3-Phase 21 produce-ready indicator,
+        /// white — tint via renderer. Deliberately unlike <see cref="Bang"/> so a
+        /// player never confuses "collect me" with "I have a quest".</summary>
+        public static Sprite Sparkle(int size = 24)
+        {
+            string key = $"sparkle_{size}";
+            if (_cache.TryGetValue(key, out var s)) return s;
+
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            var clear = new Color(0, 0, 0, 0);
+            float c = (size - 1) / 2f;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = Mathf.Abs(x - c) / c, dy = Mathf.Abs(y - c) / c;
+                    // concave-sided star: inside the astroid-ish |dx|^0.5 + |dy|^0.5 <= 1
+                    bool star = Mathf.Sqrt(dx) + Mathf.Sqrt(dy) <= 1.05f;
+                    tex.SetPixel(x, y, star ? Color.white : clear);
+                }
+            tex.Apply();
+            s = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 32f);
+            _cache[key] = s;
+            return s;
+        }
+
         /// <summary>Small four-legged blob silhouette for animals, white — tint via renderer.</summary>
         public static Sprite Critter(int w = 30, int h = 22)
         {

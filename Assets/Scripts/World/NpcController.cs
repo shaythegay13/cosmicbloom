@@ -90,6 +90,10 @@ namespace CosmicBloom.World
             npc._regionCenter = regionCenter;
             npc._ringAngle = angle;
             InteractionCue.Attach(go, CueColor);
+            // P3-Phase 21: "!" above givers with a startable quest. Attached to every
+            // NPC — it stays hidden unless QuestEngine says this one has something, so
+            // no roster-side list of "which NPCs are givers" has to be maintained.
+            QuestGiverIndicator.Attach(go);
 
             var anim = go.AddComponent<MovementAnimator>();
             anim.Init(visual.transform);

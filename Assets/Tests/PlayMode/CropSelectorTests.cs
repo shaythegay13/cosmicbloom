@@ -125,7 +125,11 @@ namespace CosmicBloom.Tests
                       $"selection '{cropA}' -> '{cropB}'");
             Assert.AreNotEqual(cropA, cropB, "a real tap on the Crop button changed the region's selected crop");
             Assert.AreNotEqual(labelBefore, cropLabel.text, "the Crop button's own label updated from the real tap");
-            Assert.AreEqual(GameDatabase.Crop(cropB)?.name, cropLabel.text, "label matches the newly-selected crop's data name");
+            // P3-Phase 21 reformatted this label to read as a control ("Crop: X ⇄")
+            // rather than a bare status readout, so match on containment, not equality.
+            StringAssert.Contains(GameDatabase.Crop(cropB)?.name, cropLabel.text,
+                "label shows the newly-selected crop's data name");
+            StringAssert.StartsWith("Crop:", cropLabel.text, "label reads as a control, not a status readout");
 
             // ── plot B: same region, now plants the newly-selected crop ──
             const int Bx = 4, By = 6;

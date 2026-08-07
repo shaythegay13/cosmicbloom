@@ -142,6 +142,11 @@ namespace CosmicBloom.World
                 animal._home = go.transform.position;
             }
             animal.Subscribe();   // Def is set now; the OnEnable call above bailed out
+
+            // P3-Phase 21: visible "produce waiting" sparkle. Attached to every animal;
+            // it stays hidden for species with no produce data and shows only when the
+            // shared per-species clock is actually ready.
+            ProduceReadyIndicator.Attach(go);
             return animal;
         }
 

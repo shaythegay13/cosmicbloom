@@ -278,6 +278,16 @@ namespace CosmicBloom.Tests
             Assert.IsTrue(AnimalSpawner.TryBuy(state, _regions, "moon_rabbit"));
             var pet = AnimalSpawner.Spawned.First(a => a.Def.id == "moon_rabbit" && a.RegionId == region);
             Assert.IsTrue(pet.IsCompanion);
+            // Sample the SNAP before any Update runs. Spawn() does the snapping; the very
+            // first Update starts the idle wander, which moves the companion a random
+            // sub-unit distance off the stop. Asserting the snap after a frame therefore
+            // measured "snap + one frame of wander" and depended on both deltaTime and the
+            // global Random sequence — P3-Phase 21 shifted that sequence (every animal now
+            // attaches an InteractionCue, which draws a random pulse phase) and tipped this
+            // over its 0.05 tolerance. The drift is correct behaviour; the sample point was
+            // wrong. (P3-Phase 21 fix; nothing about companion scheduling changed.)
+            var spawnPos = pet.transform.position;
+
             pet.walkSpeed = 200f;   // batchmode deltaTime is tiny; keep the walk short in frames
             yield return null;      // Start() subscribes to OnPeriodChanged
 
@@ -286,8 +296,12 @@ namespace CosmicBloom.Tests
             var workPos = CompanionSchedule.StopPosition(NpcSchedule.Stop.Work, bounds.center, angle);
             var socialPos = CompanionSchedule.StopPosition(NpcSchedule.Stop.Social, bounds.center, angle);
 
-            Assert.Less((pet.transform.position - workPos).magnitude, 0.05f,
+            Assert.Less((spawnPos - workPos).magnitude, 0.05f,
                 "morning spawn snaps to the Work stop");
+            // Idle wander keeps a companion within WanderRadius of its stop until the
+            // period changes — that bound is what makes the "moved away" check below real.
+            Assert.Less((pet.transform.position - workPos).magnitude, pet.WanderRadius + 0.05f,
+                "after a frame it is still idling within wander range of the Work stop");
             var morningPos = pet.transform.position;
 
             _time.timeOfDay = 0.55f;   // Midday → OnPeriodChanged next Update

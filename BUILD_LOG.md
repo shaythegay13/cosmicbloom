@@ -2,6 +2,239 @@
 
 ---
 
+## P3-Phase 21 — Tier 2 legibility pass (2026-08-07)
+
+Eight items. Six shipped code, two were investigate-only and are reported here
+with numbers rather than changes. Theme: **every system involved already worked
+correctly** — none of this fixes a mechanic, it makes existing mechanics visible.
+
+### 1. Crop info — grow time, day/night gate, growth stage
+
+`Farming/CropInfo.cs` (new) is a read-only struct built from `crops.json`
+(`GameDatabase.Crop`) plus the live `PlotState`. **The file contains no crop ids
+and no literal numbers** — every value is data. It exposes three parts
+(`NameAndStage`, `TimeAndWindow`, `StatusNote`) and composes them into two
+surfaces: `Summary` (one line) and `WorldLines` (stacked). Both are built from
+the same parts, so the surfaces can't drift.
+
+The interaction is **no gesture at all**: `FarmActionPrompt` (the Phase 17 label
+that already follows the player) gained a second `TextMesh` showing the info for
+the tile under the player. Chosen over tap-hold because the Phase 17 tap path is
+load-bearing and dense with tests, and a hidden gesture is a poor answer to a
+discoverability complaint. `FarmGrid.CropInfoAt(world)` sits next to the existing
+`ContextActionAt(world)` — the grid already owns both the world→cell mapping and
+the `GameState`, so nothing re-derives either.
+
+The key state made visible is `WindowShut`: a watered, immature crop whose
+day/night window is closed used to look **identical** to one growing normally.
+It now says "waiting for sunrise" / "waiting for nightfall".
+
+`CurrentLabel` (the verb) is deliberately unchanged and still its own mesh —
+that's the contract `Phase17UxFeedbackTests.ContextPrompt_*` asserts on.
+
+### 2. Quest-giver indicator
+
+`World/QuestGiverIndicator.cs` (new) shows a pulsing gold "!" above an NPC whose
+quest can be started **right now**, and a muted cream one while you're carrying
+one of theirs.
+
+The important part is where availability comes from. `QuestEngine` gained
+`CanStartFromGiver(npcId, quest)` and `StateForGiver(npcId)`, and
+**`OnTalkedTo`'s activation loop was refactored to call `CanStartFromGiver`
+too** — so the icon and the thing that actually starts quests are one predicate.
+If the icon is up, chatting starts a quest; that's structurally guaranteed, not
+maintained by hand. `QuestGiverAvailability_MatchesTheActivationRule_AcrossTheWholeRoster`
+checks the agreement for every NPC.
+
+Attached to **every** NPC and hidden unless the engine says otherwise, so there's
+no roster-side "which NPCs are givers" list to rot.
+
+### 3. Livestock ready-to-collect indicator
+
+`World/ProduceReadyIndicator.cs` (new), a pulsing amber sparkle.
+
+**Why the existing cue was worth nothing:** `AnimalController.Update` already had
+a "ready-produce glow" — `_body.color = c * 1.25f`. On the generated art `c` is
+`Color.white`, so the glow multiplied white by 1.25 and clamped: **literally zero
+visible change**. Livestock ran the whole Phase 4b/8 species clock silently. That
+tint is left in place (it still does something for the procedural fallback
+sprites) but is no longer the signal.
+
+The icon reads `AnimalController.ProduceReady`, so it inherits the Phase 8
+per-SPECIES rule exactly: collecting from one instance darkens every other
+region's instance too. `ProduceIcon_IsPerSpecies_NotPerInstance` proves that
+across two regions — the icon must not promise five collections.
+
+### 5. Landmark signposting + the "restored" collision
+
+Star Map rows now carry each region's landmark ledger, from `regions.json` +
+`FarmState.landmarksRestored`: `Landmarks restored X/Y`, then per landmark either
+`✓ Name — restored → unlock` or `◦ Name — N coins → unlock`. **A 900-coin
+restore is now plannable without having found the landmark.** Row labels moved to
+`resizeTextForBestFit` per the Phase 6 rule, since they became variable-length
+real data (1–4 lines).
+
+**Naming collision fixed.** `FarmState.restoration` (harvest-driven) and
+`FarmState.landmarksRestored` (coin-paid) both said "restored". The farm meter is
+now **"rewilded"** — the GDD's own word for the farm→rewild loop — in both the HUD
+and the map header; "restored" belongs to landmarks alone. **Display-only: the
+save field is still `restoration`**, so no schema/migration impact.
+
+### 6. Crop/Tool button labels
+
+Both buttons were created reading `"Tool"` / `"Crop"` and overwritten inside the
+first `Update`, so the functional label was never on screen for a frame anyone
+could see; Tool then showed the raw `cosmic_hoe` id. Now `Tool: Cosmic Hoe ⇄` /
+`Crop: Wheat ⇄` — display names from `tools.json`/`crops.json`, correct on frame
+zero, and reading as controls rather than status readouts.
+
+**Real bug found while doing it:** `CycleTool` recovered its cycle position by
+parsing the label back out (`_toolLabel.text.StartsWith("Tool")`). With the new
+format that test is always true, so every tap would have reset to `owned[0]` and
+most owned tools would be unreachable. Position now lives in a `_selectedToolId`
+field. `ToolButton_CyclesThroughEveryOwnedTool_NotJustTheFirstTwo` guards it.
+
+### 4. INVESTIGATION — tap-to-plant precision. **Targeting is exact.**
+
+Not a targeting problem, so "walking paths" should be read as a genuine feature
+request, not a workaround for imprecision. Three independent confirmations:
+
+- `PlayerController.OnTapWorld` resolves an already-tilled plot via
+  `Physics2D.OverlapPoint(world)` and calls `Interact` on **that** `FarmPlot`,
+  which passes its own `gridX/gridY`. Bare ground goes through
+  `FarmGrid.TryTargetTill(world)` → `_grid.WorldToCell(world)`. Neither path
+  reads the player's position for targeting — only for the range check.
+- `ToolService.AreaFor` has **no case for `"plant"`**, so it falls to `default`
+  and returns exactly one cell at every tool tier.
+- `Investigation_TapToPlant_LandsOnTheTappedTile_NotNearThePlayer` taps (14,12)
+  from (20.5,20.5) — >5 units away — and asserts the crop lands on (14,12) and
+  that nothing at all was created under the player.
+
+Caveat worth knowing: till/water/harvest **do** have tiered AoE (till t3 = 3×1,
+water t2/t3, harvest t1/t2 = up to 3×3). Those are anchored on the tapped cell but
+affect neighbours. Only `plant` is strictly single-cell.
+
+### 8. INVESTIGATION — time to 900 coins. **Not a balance problem; one real risk.**
+
+Per-plot rates (net of `seedPrice` auto-buy), best crops in the Vale:
+
+| crop | net | grow | coins/min/plot | waterings |
+|---|---|---|---|---|
+| starlight_berry | 7c | 5m | **1.40** | 3 |
+| star_tomato | 14c | 12m | 1.17 | 3 |
+| carrot / potato / cucumber / radish | 8–11c | 8–11m | ~1.00 | 3 |
+| clover_cover | **−2c** | 12m | −0.17 | 2 |
+
+**900 coins ≈ 129 harvests** of starlight_berry (~100 at a typical ~9c mix).
+Plots run in parallel, so wall-clock depends entirely on plot count and how well
+the player keeps up with watering (best crop needs a tap per plot every 1.67 min):
+
+| plots | rate | 900c at perfect attention |
+|---|---|---|
+| 4 | 5.6 c/min | 2.7 h |
+| 9 | 12.6 c/min | 1.2 h |
+| 16 | 22.4 c/min | **40 min** |
+| 25 | 35.0 c/min | 26 min |
+
+At a realistic ~40% of perfect watering cadence, 16 plots ≈ **1.5–2.5 hours**.
+
+**Animals contribute ~nothing.** Produce coins are `max(2, cost/40)`. Best is
+star_slime at 0.31 c/min — but it costs 1500, an **81-hour payback**. Chicken is
+0.167 c/min and 20 hours. Every animal's payback is ≥20 h, and the clock **does
+not accrue offline** (`_produceReadyBySpecies` is in-memory and
+`AnimalSpawner.SpawnOwned` calls `ResetProduceClocks()`, so every session restart
+zeroes it). Animals are ambience and quest items, not an income strategy.
+
+**Quest rewards are the actual economy, and they cover it.** Act 1 pays **1425
+coins** across 15 quests. All three Vale landmarks cost 1550 and refund
+180+100+300 = 580 → **970 net**. Act-1 quest income alone covers all three with
+455 to spare. The 250→180 / 400→100 / 900→300 spreads look net-negative only in
+isolation; they're a sink balanced against quest income, which is the intended
+shape.
+
+**The real risk is a different, invisible sink: `ToolService.EnsureTools`
+auto-buys without asking.** The moment a player hits the level and can afford it,
+performing that action silently spends 350c (star_scythe, Lv4) then 500c
+(cosmic_hoe_2, Lv6) — 850 coins gone unprompted, directly competing with saving
+for a 900c landmark, with no UI showing it happened. Reaching Lv4 takes 600 xp
+(~120 berry harvests), so this fires *before* most players bank 900. **Flagged,
+not changed** — it's the user-approved q_toolsmith mechanism (2026-07-05) and
+altering it is a design decision, not a mechanical one.
+
+### 7. Test filter lists — and a third instance of the documented rot
+
+`CropSelectorTests` was **already** in `render_names.txt` — Phase 20 folded it in
+when it renamed both files from `phase18_*` to `nographics_filter.txt` /
+`render_names.txt`. So item 7 needed no change; it needed confirming, which it now
+has (it ran and passed inside the render split, `Logs/p21_final_render.xml`).
+
+But auditing for it turned up the same rot again: **`MovementAnimationTests`
+(Phase 19, 3 tests) was in neither list** — its own file header says the
+screenshot test "belongs in the RENDER split", and it had never been added to
+either. Phase 19's tests had only ever run ad hoc, exactly as Phase 17's had.
+
+Both lists are now verified **mechanically, not by eye**: extract every
+`[Test]`/`[UnityTest]` method from `Assets/Tests/PlayMode/`, diff against the
+union of the two filters. Result: **125 test methods, 125 filter names, 0 missing,
+0 dead, 0 duplicates.** Run that diff, not a glance, whenever tests are added.
+
+### Bug this phase caused and fixed: RNG perturbation, not flakiness
+
+`Phase18AnimalRoleTests.CompanionWalksToNewStop_AtPeriodTransition` started
+failing (`0.092 > 0.05`) mid-phase and reproduced in isolation — so not flake.
+Cause: `InteractionCue.Attach` draws `Random.Range` for its pulse-phase desync.
+Every animal now attaches one, which **shifts the global `Random` sequence** that
+`AnimalController`'s idle wander draws from.
+
+The test was asserting the *spawn snap* one frame **after** spawn — i.e. it was
+measuring "snap + one frame of randomised wander", dependent on both `deltaTime`
+and RNG. It now samples the position before any `Update` runs, and separately
+asserts the companion stays within `WanderRadius` of the stop. The drift was
+always correct behaviour; the sample point was wrong. **No companion scheduling
+changed.**
+
+### Pre-existing art bug found (NOT introduced here, NOT fixed)
+
+**6 of 50 NPC sprites have an opaque grey checkerboard baked into the PNG** —
+`helia`, `lull`, `lumina`, `noctua`, `pip`, `pyra` (~45% neutral-grey opaque
+pixels; `pip` ~26%). The Gemini export wrote the transparency-checker pattern as
+real pixels. Visible as grey boxes behind those characters in the world.
+Confirmed pre-existing: the same boxes are in `Logs/phase5_sprites.png` from
+Phase 5. Not fixed — per CLAUDE.md, re-running `build-cosmic.mjs npcs` would
+**replace all 50 Gemini portraits with procedural output**, so this needs a
+targeted re-export in a future art batch.
+
+### Verification evidence
+
+Full regression, both splits, reusing the canonical filters:
+
+```
+Logs/p21_final_nographics.xml   total=103 passed=103 failed=0   (filter: 103 names)
+Logs/p21_final_render.xml       total= 22 passed= 22 failed=0   (filter:  22 names)
+                                        125 total = 125 filter names
+```
+
+`total=` matches the filter name count on both halves — the check that catches
+the BOM / comma-separator / newline-glue silent-zero-test false passes.
+
+Screenshots (freshly captured by the final run, 17:50):
+- `Logs/phase21_world_indicators.png` — crop info line (name · stage 1/4 / 5m
+  total · grows anytime / needs water) stacked above the Phase 17 verb, the gold
+  "!" over a real quest giver, the amber sparkle over a chicken with produce ready.
+- `Logs/phase21_starmap_landmarks.png` — Star Map with all 7 landmarks' costs and
+  unlocks across 5 regions, `Landmarks restored 1/3`, `42% rewilded` in the HUD,
+  and `Tool: Cosmic Hoe ⇄` / `Crop: Wheat ⇄` in the bottom bar.
+
+Two screenshot-driven fixes the first capture forced (evidence, not taste): the
+info line was one long string that ran off **both** edges of the camera → split
+into short stacked lines at half the verb's size; and both indicators were ~9px
+in a 720px frame → scaled up, with the produce sparkle pushed oranger and higher
+because pale gold over a white chicken was invisible.
+
+**P3-Phase 21: COMPLETE ✅**
+
+---
+
 ## P3-Phase 20 — camera framing retune for 40x40 regions (2026-08-07)
 
 **The bug.** `cam.orthographicSize = 7f` was set in Phase 2 (`f911e7a`), when

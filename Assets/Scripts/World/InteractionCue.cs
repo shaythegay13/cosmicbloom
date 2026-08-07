@@ -19,16 +19,20 @@ namespace CosmicBloom.World
         Color _baseColor;
 
         /// <summary>Adds a pulsing dot above `target`, tinted `color`. Returns the cue so
-        /// callers can toggle it (e.g. dim/hide once a landmark no longer needs advertising).</summary>
-        public static InteractionCue Attach(GameObject target, Color color, float yOffset = 0.9f, float scale = 0.16f)
+        /// callers can toggle it (e.g. dim/hide once a landmark no longer needs advertising).
+        /// Pass `sprite` to use a glyph instead of the default dot (P3-Phase 21 reuses this
+        /// one pulse animation for the quest-giver "!" and the produce-ready sparkle, rather
+        /// than growing a second, near-identical bobbing component).</summary>
+        public static InteractionCue Attach(GameObject target, Color color, float yOffset = 0.9f,
+                                            float scale = 0.16f, Sprite sprite = null, string name = "InteractionCue")
         {
-            var go = new GameObject("InteractionCue");
+            var go = new GameObject(name);
             go.transform.SetParent(target.transform, false);
             go.transform.localPosition = new Vector3(0f, yOffset, 0f);
             go.transform.localScale = Vector3.one * scale;
 
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = ProceduralSprites.Square(16, 2);
+            sr.sprite = sprite != null ? sprite : ProceduralSprites.Square(16, 2);
             sr.color = color;
             sr.sortingOrder = 30;
             var mat = ProceduralSprites.LitMaterial;

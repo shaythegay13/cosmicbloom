@@ -1,6 +1,7 @@
 // Cosmic Bloom — always-on HUD: coins, level+XP, day/night + day number,
 // current region + restoration, active tool, selected crop. Buttons open
 // quest log / map / pause and cycle tool & crop. All placeholder uGUI.
+using System.Linq;
 using CosmicBloom.Core;
 using CosmicBloom.Data;
 using CosmicBloom.Farming;
@@ -21,6 +22,7 @@ namespace CosmicBloom.UI
         Text _stats;
         Text _toolLabel;
         Text _cropLabel;
+        string _selectedToolId;   // real cycle position; never re-parsed from the label
 
         public static HudUI Create(GameState state, QuestEngine engine, World.RegionManager regions)
         {
@@ -70,6 +72,20 @@ namespace CosmicBloom.UI
             var crop = MakeBarButton(bottom.transform, 3, "Crop", CycleCrop);
             _cropLabel = crop.GetComponentInChildren<Text>();
             MakeBarButton(bottom.transform, 4, "Menu", () => Pause.Toggle());
+
+            // P3-Phase 21: these two labels used to be created reading "Tool"/"Crop" and
+            // then overwritten inside the first Update, so their functional text was
+            // never actually on screen for a frame the player could see — and the tool
+            // one showed a raw snake_case id. Both now render their real, human-readable
+            // value immediately, and every label is variable-length real data, so they
+            // use best-fit sizing per the Phase 6 rule rather than a fixed font size.
+            foreach (var label in new[] { _toolLabel, _cropLabel })
+            {
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = 10;
+                label.resizeTextMaxSize = 22;
+            }
+            RefreshSelectorLabels();
         }
 
         static Button MakeBarButton(Transform bar, int slot, string label, System.Action onClick)
@@ -84,27 +100,63 @@ namespace CosmicBloom.UI
 
         void CycleTool()
         {
-            // cycle among owned tools; selecting sets it for its action
+            // cycle among owned tools; selecting sets it for its action.
+            // The index comes from _selectedToolId, NOT from parsing the label back out
+            // — the old label round-trip broke the moment the label stopped being the
+            // bare tool id, and silently restarted the cycle at owned[0] every tap.
             var owned = _state.Save.tools;
             if (owned.Count == 0) return;
-            string current = _toolLabel.text.StartsWith("Tool") ? owned[0] : _toolLabel.text;
-            int idx = Mathf.Max(0, owned.IndexOf(current));
+            int idx = Mathf.Max(0, owned.IndexOf(_selectedToolId ?? owned[0]));
             string next = owned[(idx + 1) % owned.Count];
             ToolService.SelectTool(_state, next);
-            _toolLabel.text = next;
+            _selectedToolId = next;
+            RefreshSelectorLabels();
         }
 
         void CycleCrop()
         {
-            string region = World.RegionManager.Instance != null
-                ? World.RegionManager.Instance.CurrentRegionId : _state.Save.currentRegion;
-            var options = new System.Collections.Generic.List<CropDef>(World.CropSelection.OptionsFor(region));
+            var options = new System.Collections.Generic.List<CropDef>(World.CropSelection.OptionsFor(CurrentRegion));
             if (options.Count == 0) return;
-            string current = World.CropSelection.SelectedFor(_state, region);
+            string current = World.CropSelection.SelectedFor(_state, CurrentRegion);
             int idx = Mathf.Max(0, options.FindIndex(c => c.id == current));
             var next = options[(idx + 1) % options.Count];
-            World.CropSelection.Select(region, next.id);
-            _cropLabel.text = next.name;
+            World.CropSelection.Select(CurrentRegion, next.id);
+            RefreshSelectorLabels();
+        }
+
+        string CurrentRegion => World.RegionManager.Instance != null
+            ? World.RegionManager.Instance.CurrentRegionId : _state.Save.currentRegion;
+
+        /// <summary>Display name for a tool id, from tools.json. Falls back to the raw id
+        /// only if data has no entry — the player should never see snake_case.</summary>
+        static string ToolName(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var def = GameDatabase.Tools.FirstOrDefault(t => t.id == id);
+            return def?.name ?? id;
+        }
+
+        /// <summary>P3-Phase 21: both selectors read as controls ("Tool: Cosmic Hoe ⇄")
+        /// rather than status readouts, and always show a real display name. Public for
+        /// tests and for callers that change selection outside these buttons.</summary>
+        public void RefreshSelectorLabels()
+        {
+            if (_state == null) return;
+
+            if (_toolLabel != null)
+            {
+                if (_selectedToolId == null || !_state.Save.tools.Contains(_selectedToolId))
+                    _selectedToolId = _state.Save.tools.Count > 0 ? _state.Save.tools[0] : null;
+                _toolLabel.text = _selectedToolId != null
+                    ? $"Tool: {ToolName(_selectedToolId)} ⇄"
+                    : "Tool: none ⇄";
+            }
+
+            if (_cropLabel != null)
+            {
+                var crop = GameDatabase.Crop(World.CropSelection.SelectedFor(_state, CurrentRegion));
+                _cropLabel.text = crop != null ? $"Crop: {crop.name} ⇄" : "Crop: none ⇄";
+            }
         }
 
         void Update()
@@ -112,20 +164,22 @@ namespace CosmicBloom.UI
             if (_state == null || _stats == null) return;
             var save = _state.Save;
             var time = TimeManager.Instance;
-            string region = World.RegionManager.Instance != null
-                ? World.RegionManager.Instance.CurrentRegionId : save.currentRegion;
+            string region = CurrentRegion;
             var regionDef = GameDatabase.Region(region);
-            float restoration = _state.FarmFor(region).restoration;
+            float rewilded = _state.FarmFor(region).restoration;
 
+            // P3-Phase 21: this used to read "% restored", the same word LANDMARK
+            // restoration uses — two unrelated mechanics sharing one label. This meter is
+            // FarmState.restoration, driven by harvesting native crops; landmarks are a
+            // separate coin-paid count (FarmState.landmarksRestored, surfaced in the Star
+            // Map). "Rewilded" is the GDD's own word for the farm→rewild loop, so the
+            // rename goes here and "restored" stays with landmarks.
             _stats.text =
                 $"⛁ {save.coins}   Lv {save.level} ({save.xp}/{GameState.XpForLevel(save.level)}xp)   " +
                 $"{(time != null && time.IsNight ? "☾ Night" : "☀ Day")} {time?.DayNumber ?? 1}   " +
-                $"{regionDef?.name ?? region}: {restoration:F0}% restored";
+                $"{regionDef?.name ?? region}: {rewilded:F0}% rewilded";
 
-            if (_toolLabel != null && _toolLabel.text == "Tool" && save.tools.Count > 0)
-                _toolLabel.text = save.tools[0];
-            if (_cropLabel != null && _cropLabel.text == "Crop")
-                _cropLabel.text = GameDatabase.Crop(World.CropSelection.SelectedFor(_state, region))?.name ?? "Crop";
+            RefreshSelectorLabels();
         }
     }
 }

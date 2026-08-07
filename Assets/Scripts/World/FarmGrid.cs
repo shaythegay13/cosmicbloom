@@ -94,6 +94,17 @@ namespace CosmicBloom.World
             return done > 0;
         }
 
+        /// <summary>Live crop facts (grow time / day-night gate / stage) for the plot at
+        /// this world point, or a blank HasCrop=false when there's no crop there
+        /// (P3-Phase 21). Sits alongside ContextActionAt on purpose: the grid already
+        /// owns both the world→cell mapping and the GameState, so callers don't
+        /// re-derive either.</summary>
+        public Farming.CropInfo CropInfoAt(Vector3 world)
+        {
+            var c = _grid.WorldToCell(world);
+            return Farming.CropInfo.For(_state, RegionId, c.x, c.y);
+        }
+
         /// <summary>What tapping this world point would do right now — "till"/"plant"/
         /// "water"/"harvest", or null if nothing (bare non-tillable ground, or a plot
         /// mid-growth with no action available). Drives <see cref="Farming.FarmActionPrompt"/>

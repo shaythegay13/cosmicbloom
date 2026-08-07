@@ -160,6 +160,42 @@ namespace CosmicBloom.Core
         public bool HasActiveStepOfType(string type) =>
             ActiveQuests().Any(id => CurrentStep(id)?.type == type);
 
+        // ── quest-giver availability (P3-Phase 21) ────────────────────────────
+        // NPCs that hand out quests were visually identical to NPCs that don't, so
+        // finding the next quest meant tapping the whole roster. These accessors are
+        // the SINGLE source of truth for "does this NPC have something for me": the
+        // world indicator reads them, and OnTalkedTo's activation loop below calls
+        // CanStartFromGiver too, so the icon can never promise a quest that talking
+        // won't actually start.
+
+        public enum GiverState { None, Available, InProgress }
+
+        /// <summary>Would chatting to this NPC start a quest right now? Mirrors exactly
+        /// what OnTalkedTo does: their own side quest, not already active/completed, not
+        /// a link in a chain (those start from their predecessor), and never q_arrival
+        /// (bootstrapped in Bind).</summary>
+        public bool CanStartFromGiver(string npcId, QuestDef quest) =>
+            quest != null && npcId != null &&
+            quest.giver == npcId &&
+            !IsActive(quest.id) && !IsCompleted(quest.id) &&
+            quest.id != "q_arrival" &&
+            !GameDatabase.Quests.Any(other => other.unlocks == quest.id);
+
+        /// <summary>What this NPC should advertise above their head. Available (a quest
+        /// starts on chat) outranks InProgress (already carrying one of theirs).</summary>
+        public GiverState StateForGiver(string npcId)
+        {
+            if (npcId == null) return GiverState.None;
+            bool inProgress = false;
+            foreach (var quest in GameDatabase.Quests)
+            {
+                if (quest.giver != npcId) continue;
+                if (CanStartFromGiver(npcId, quest)) return GiverState.Available;
+                if (IsActive(quest.id)) inProgress = true;
+            }
+            return inProgress ? GiverState.InProgress : GiverState.None;
+        }
+
         // ── activation / completion ───────────────────────────────────────────
 
         public void StartQuest(string id)
@@ -365,13 +401,11 @@ namespace CosmicBloom.Core
             TryDeliver(npcId);
             HandleFestivalTalk(npcId);
 
-            // side quests activate on first chat with their giver
-            foreach (var quest in GameDatabase.Quests)
-            {
-                if (quest.giver != npcId || IsActive(quest.id) || IsCompleted(quest.id)) continue;
-                bool inChain = GameDatabase.Quests.Any(other => other.unlocks == quest.id);
-                if (!inChain && quest.id != "q_arrival") StartQuest(quest.id);
-            }
+            // Side quests activate on first chat with their giver. The eligibility rule
+            // lives in CanStartFromGiver so the P3-Phase 21 world indicator advertises
+            // exactly the quests this loop will actually start — one predicate, no drift.
+            foreach (var quest in GameDatabase.Quests.ToList())
+                if (CanStartFromGiver(npcId, quest)) StartQuest(quest.id);
         }
 
         /// <summary>deliver: talking to a step's target while holding its item completes
