@@ -2,6 +2,104 @@
 
 ---
 
+## P3-Phase 20 — camera framing retune for 40x40 regions (2026-08-07)
+
+**The bug.** `cam.orthographicSize = 7f` was set in Phase 2 (`f911e7a`), when
+regions were 20x20. P3-Phase 15 (`f296465`) quadrupled region area to 40x40 and
+touched `AttachCamera` — but the diff was **only the trailing comment**
+(`~2/3 of a region` → `~1/3 of a 40x40 region`). The value never moved.
+`git log -S "orthographicSize = 7f"` returns exactly one commit, Phase 2's.
+Net effect: the live view showed **6.9%** of a region (20% wide x 35% tall on a
+portrait phone) versus ~28% before the resize, and **none** of Starlight Vale's
+3 landmarks was on screen from the spawn point — the direct cause of the
+"I don't know how to get these" report.
+
+**The fix.** `CameraFollow.DefaultOrthographicSize = 14f`, consumed by
+`GameBootstrap.AttachCamera`. The constant lives on `CameraFollow` (not as a
+literal in GameBootstrap) so the clamp math and the framing tests read one value.
+
+**DECISION — why 14 and not 12 or 13.** Evidence, not taste: 14 is the smallest
+half-height that reaches the landmark ring, whose furthest slot is at **+14 on Y**
+(`LandmarkSpawner.Slots`), and it simultaneously brings the **NPC home ring
+(r=14.4**, `NpcController`) to the frame edge. The candidate sweep screenshots
+show it plainly — at ortho 12 and 13 the spawn view is crops and bare tilemap; at
+14 a landmark (top centre) and an NPC (bottom left) are both in frame, in both
+`starlight_vale` and `nebula_garden`. Scale 14 with those two constants if the
+region ever resizes again. Evidence:
+`Logs/phase20_framing_{starlight_vale,sun_garden,nebula_garden}_ortho{07,12,13,14}.png`
+(12 PNGs, before + all candidates), `Logs/p20_framing_sweep.xml` 1/1.
+
+| ortho | view (units) | % of region | screen px / world unit |
+|---|---|---|---|
+| 7 (old) | 7.9 x 14.0 | 20% x 35% = **6.9%** | 91.4 |
+| 12 | 13.5 x 24.0 | 34% x 60% | 53.3 |
+| 13 | 14.6 x 26.0 | 37% x 65% | 49.2 |
+| **14 (shipped)** | **15.8 x 28.0** | **39% x 70% = 27.6%** | **45.7** |
+
+**Second bug found and fixed en route: `CameraFollow.SnapTo` bypassed the clamp.**
+It set `transform.position` raw from the passed position, so a region-travel snap
+could land the camera outside the region and visibly lurch back over the frames
+SmoothDamp took to ease in. Harmless at ortho 7 (the clamp box was huge); it bites
+at 14, where the legal camera box is only **24.3 x 12.0** units inside the 40x40
+region. Extracted `CameraFollow.ClampedFocus(focus)` — now the single clamp used by
+both `LateUpdate` and `SnapTo`. The clamp formula itself was already correct and
+needed no change; what was wrong was one caller skipping it.
+
+**Verification** (`Logs/p20_framing_logic2.xml` 3/3, `Logs/p20_framing_sweep.xml` 1/1):
+- All 3 Vale landmarks **reached via real taps** (`OnTapWorld` + `MoveStep`, dist
+  0.00 each) and inside the camera rect on arrival — `broken_greenhouse` (250c) at
+  (7,31), `moonlit_pond` (400c) at (20,34), `celestial_arboretum` (900c) at (33,31).
+- Camera view never leaves the region at any panned corner, including targets driven
+  100 units past the bounds; the player stays on screen at every clamped corner.
+- Pan box is non-degenerate (24.3 x 12.0) — the camera still follows rather than
+  pinning to region centre, which is the failure mode a too-large size introduces.
+
+**Legibility — measured, not eyeballed.** Generated art is 64x64 px at
+`spritePixelsToUnits: 64`, so a character/crop sprite is exactly **1 world unit**
+and screen-px-per-unit is the whole story. At ortho 14 on a 1280px-tall portrait
+frame a sprite renders at **45.7px**, above the 44px floor (Apple HIG minimum
+interactive target) asserted by `SpriteFootprint_StaysAboveLegibilityFloor`.
+**UI is unaffected, provably**: `UIRoot` is `ScreenSpaceOverlay` +
+`ScaleWithScreenSize` @1080x1920, so HUD/dialogue sizing is independent of camera
+zoom by construction — no screenshot needed to rule it out.
+
+**FLAGGED — accepted trade-off, not a silent one.** 45.7px < the 64px source, so
+art is now **downscaled 0.71x** with `filterMode: 0` (Point). Point filtering below
+1:1 drops source rows unevenly, which can shimmer while walking. It clears the
+readability floor and reads fine in the captures, so it ships — but this is why the
+comment on `DefaultOrthographicSize` says don't raise it much further without an
+art pass. Switching generated sprites to Bilinear would trade crispness for
+smoothness; that changes how the pixel art looks, so it's an art-direction call and
+was NOT made unilaterally.
+
+**FLAGGED — zoom alone does not close landmark discoverability.** From spawn the
+retune goes 0/3 → **1/3** landmarks on screen. The other two sit at x=±13, and
+portrait aspect makes X the binding constraint (halfW is only 0.5625*size): seeing
+x=±13 needs ortho >= 23, past the region's own half-height, where the camera pins to
+centre and stops following entirely. So the remaining gap is **signposting, not
+framing** — `restoreCost` is read by no UI file at all (only `Definitions.cs` and
+`LandmarkController.cs`), the Star Map lists regions but never landmarks, and the
+quest log renders the raw step as `restore landmark moonlit_pond` with no cost or
+location. Separately, the HUD's `"Starlight Vale: 0% restored"` is the
+harvest-driven `FarmState.restoration` score and has **zero** relation to
+`landmarksRestored` — same word, unrelated system. Not fixed here; out of scope
+for a camera change and partly a content/design call.
+
+**Test-filter maintenance.** `CropSelectorTests` was in **neither** canonical list —
+it calls `Camera.Render()` and had only ever been run ad hoc (`Logs/cropselector_test3.xml`),
+so the p20 split never executed it. Added to the render list. Also renamed both
+lists **phase-agnostic** — `Tools/testing/{nographics_filter,render_names}.txt`
+(was `phase18_*`) — because bumping the filename every phase is itself the rot
+mechanism: the old name lingers, nothing points at it, and drift goes unnoticed.
+One canonical filename now, with git history as the record of change.
+
+**Full regression:** nographics **88/88 PASS** (`Logs/p21_split_nographics.xml`),
+render **20/20 PASS** (`Logs/p21_split_render.xml`). Both `total=` values match
+their filter's name count exactly (88 and 20), so neither run silently matched
+nothing.
+
+---
+
 ## Canonical test filters moved into version control (2026-07-25)
 
 Housekeeping, no gameplay change. The two canonical split lists lived in

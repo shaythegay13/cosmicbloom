@@ -128,7 +128,7 @@ namespace CosmicBloom.Core
         {
             var cam = Camera.main;
             if (cam == null || Player == null) return;
-            cam.orthographicSize = 7f;   // frames ~1/3 of a 40x40 region on a portrait phone
+            cam.orthographicSize = CameraFollow.DefaultOrthographicSize;
             var follow = cam.GetComponent<CameraFollow>() != null
                 ? cam.GetComponent<CameraFollow>()
                 : cam.gameObject.AddComponent<CameraFollow>();
