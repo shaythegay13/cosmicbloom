@@ -702,7 +702,7 @@ namespace CosmicBloom.Tests
         {
             if (_cam != null) Object.DestroyImmediate(_cam.gameObject);
             if (_player != null) Object.DestroyImmediate(_player.gameObject);
-            foreach (var npc in Object.FindObjectsByType<NpcController>(FindObjectsSortMode.None))
+            foreach (var npc in Object.FindObjectsByType<NpcController>())
                 Object.DestroyImmediate(npc.gameObject);
             foreach (var kv in _grids) Object.DestroyImmediate(kv.Value.gameObject);
             Object.DestroyImmediate(_regions.gameObject);

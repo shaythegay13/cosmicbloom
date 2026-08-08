@@ -27,9 +27,9 @@ namespace CosmicBloom.Tests
         /// doesn't leak a still-fading burst/popup into whichever test runs next.</summary>
         static void ClearFireAndForgetVfx()
         {
-            foreach (var fx in Object.FindObjectsByType<FarmActionEffectParticle>(FindObjectsSortMode.None))
+            foreach (var fx in Object.FindObjectsByType<FarmActionEffectParticle>())
                 Object.DestroyImmediate(fx.gameObject);
-            foreach (var p in Object.FindObjectsByType<RewardPopup>(FindObjectsSortMode.None))
+            foreach (var p in Object.FindObjectsByType<RewardPopup>())
                 Object.DestroyImmediate(p.gameObject);
         }
 
@@ -119,7 +119,7 @@ namespace CosmicBloom.Tests
             // unparented fire-and-forget GameObjects (self-destroy after their own short
             // lifetime) so they aren't cleaned up by this test's region teardown — an
             // earlier test's still-fading burst can legitimately still exist here.
-            int PlantFxCount() => Object.FindObjectsByType<FarmActionEffectParticle>(FindObjectsSortMode.None)
+            int PlantFxCount() => Object.FindObjectsByType<FarmActionEffectParticle>()
                 .Count(p => p.gameObject.name == "FX_plant");
 
             int before = PlantFxCount();
@@ -209,10 +209,10 @@ namespace CosmicBloom.Tests
 
             // Delta-based (see Planting_SpawnsFxBurst comment): a still-fading popup from
             // an earlier test can legitimately exist when this test starts.
-            var before = Object.FindObjectsByType<RewardPopup>(FindObjectsSortMode.None).ToHashSet();
+            var before = Object.FindObjectsByType<RewardPopup>().ToHashSet();
             Assert.IsTrue(farming.Harvest(20, 20));
 
-            var newPopups = Object.FindObjectsByType<RewardPopup>(FindObjectsSortMode.None)
+            var newPopups = Object.FindObjectsByType<RewardPopup>()
                 .Where(p => !before.Contains(p)).ToList();
             Assert.AreEqual(1, newPopups.Count, "harvest spawned exactly one NEW reward popup");
             string text = newPopups[0].GetComponent<TextMesh>().text;

@@ -191,7 +191,7 @@ namespace CosmicBloom.Tests
                               $"{PxPerUnit(size):F1} screen px per world unit");
                 }
                 Object.DestroyImmediate(cam.gameObject);
-                foreach (var npc in Object.FindObjectsByType<NpcController>(FindObjectsSortMode.None))
+                foreach (var npc in Object.FindObjectsByType<NpcController>())
                     Object.DestroyImmediate(npc.gameObject);
                 Object.DestroyImmediate(player.gameObject);
                 _player = null;
