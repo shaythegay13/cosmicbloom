@@ -134,6 +134,10 @@ namespace CosmicBloom.Core
                 : cam.gameObject.AddComponent<CameraFollow>();
             follow.target = Player.transform;
             follow.SnapTo(Player.transform.position);
+
+            // Pinch-to-zoom (P3-Phase 23). Lives on the camera beside CameraFollow, which
+            // owns the [Min, Max] clamp — this only recognises the gesture.
+            if (cam.GetComponent<PinchZoom>() == null) cam.gameObject.AddComponent<PinchZoom>();
         }
     }
 }

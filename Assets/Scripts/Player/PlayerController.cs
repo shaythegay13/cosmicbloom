@@ -21,6 +21,7 @@ namespace CosmicBloom.World
         Vector2Int? _pendingTill;   // free-form till target reached by walking there
         Camera _cam;
         bool _pressWasHeld;
+        float _lastTapMoveTime = float.NegativeInfinity;   // see CancelRecentTapMove
 
         void Awake() => _cam = Camera.main;
 
@@ -40,6 +41,13 @@ namespace CosmicBloom.World
             bool held = pointer.press.isPressed;
             bool pressedNow = held && !_pressWasHeld;
             _pressWasHeld = held;
+
+            // A two-finger pinch (P3-Phase 23) owns the gesture. Note _pressWasHeld is
+            // updated BEFORE this bail-out: lifting one finger at the end of a pinch
+            // leaves the other still pressed, and a stale edge there would fire a
+            // phantom tap at whatever the remaining finger happens to be resting on.
+            if (PinchZoom.IsPinching) return;
+
             if (!pressedNow) return;
 
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
@@ -122,6 +130,20 @@ namespace CosmicBloom.World
             MoveTarget = RegionManager.Instance != null
                 ? RegionManager.Instance.ClampToCurrentRegion(world)
                 : world;
+            _lastTapMoveTime = Time.time;
+        }
+
+        /// <summary>Drop a move order issued within the last <paramref name="window"/>
+        /// seconds. PinchZoom calls this when a gesture begins: the pinch's FIRST finger
+        /// lands alone, so HandleTap has already read it as a tap and sent the player
+        /// walking before the second finger arrives. The window is what keeps this from
+        /// being a blunt CancelMove — a pinch must not abandon a walk-to-NPC the player
+        /// ordered seconds earlier and is still waiting on.</summary>
+        public void CancelRecentTapMove(float window)
+        {
+            if (MoveTarget == null) return;
+            if (Time.time - _lastTapMoveTime > window) return;
+            CancelMove();
         }
 
         public void CancelMove()

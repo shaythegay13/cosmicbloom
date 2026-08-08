@@ -2,6 +2,138 @@
 
 ---
 
+## P3-Phase 23 — player-facing pinch-to-zoom (2026-08-07)
+
+Camera zoom had been fixed at `CameraFollow.DefaultOrthographicSize` since
+P3-Phase 20 derived it. This phase makes it a two-finger gesture, bounded so it
+can never undo that derivation.
+
+### Item 1 — the bounds
+
+**Max = 14, deliberately equal to `DefaultOrthographicSize`, not a looser
+ceiling.** P3-Phase 20 derived 14 as the *smallest* half-height reaching the
+landmark ring (`LandmarkSpawner.Slots` max +14 on Y) while keeping a 1-unit
+sprite above the 44px legibility floor — it renders at 45.7px, already 0.71x
+downscaled against the 64px source art. Going past it buys no new landmark and
+drops sprites under the floor, so **zoom-out is a way to return to the derived
+framing, never to exceed it.** `RealPinch_ClampsAtMinAndMax_*` re-asserts the
+44px floor at the max bound so the two can't drift apart.
+
+**Min = 5, picked by sweep-and-measure** (the same method Phase 20 used), not
+blind. `MinZoomCandidateSweep_Screenshots` captures 4/5/6/7/14 at 720x1280 and
+logs what is actually visible — `Logs/phase23_minzoom_candidate_ortho*.png`:
+
+| ortho | view (units) | px/unit | vs 64px source | 3x3 AoE as % of frame width |
+|-------|--------------|---------|----------------|------------------------------|
+| 4  | 4.5 x 8.0   | 160.0 | **2.50x** non-integer | 67% |
+| 5  | 5.6 x 10.0  | 128.0 | **2.00x INTEGER**     | 53% |
+| 6  | 6.8 x 12.0  | 106.7 | **1.67x** non-integer | 44% |
+| 7  | 7.9 x 14.0  |  91.4 | **1.43x** non-integer | 38% |
+| 14 | 15.8 x 28.0 |  45.7 | **0.71x** non-integer | 19% |
+
+Two things decided it, and both are visible in the captures rather than merely
+computed. **5 is the only candidate on an exact integer upscale** — under this
+project's Point filtering that is the difference between clean pixel doubling and
+uneven source-row duplication, and the character sprite's outline is visibly
+cleaner at 5 than at 4 or 6. And **4 is genuinely cramped**: 4.5 units of portrait
+width holds barely two crop columns, and the widest tool AoE (3x3 — till t3,
+water t3, harvest t2) eats 67% of the frame. Range is 14/5 = **2.8x**.
+
+### Item 2 — the clamp under a moving zoom (the risk called out up front)
+
+`ClampedFocus` already read `_cam.orthographicSize` live rather than caching it,
+so it was correct by construction — but nothing had ever asserted that, and
+"correct today" is how the P3-Phase 15 camera value rotted. Now pinned three ways:
+
+- `ClampedFocus_RecomputesTheLegalBox_PerZoomLevel` clamps the *same* out-of-bounds
+  focus at 5 zoom levels and requires a *strictly different* answer each time,
+  each matching `region max - current half-extent` analytically. A box frozen at
+  ortho 14 would return one answer five times.
+- `LateUpdateAndSnapTo_BothUseTheCurrentZoomsClamp` — 5 zoom levels x 7 extreme
+  foci, asserting **both** callers land exactly on `ClampedFocus`'s value. This is
+  the zoom-shaped version of the P3-Phase 20 bug (SnapTo bypassing the shared
+  clamp), which would now reappear as SnapTo clamping against a *stale size*.
+- `ContinuousZoomSweep_NeverShowsOutsideTheRegion` — 82 steps across the range
+  while parked in a corner, because a real pinch passes through every value
+  between the bounds, not just the endpoints.
+
+**One real fix was needed here, not just tests.** Zooming *out* shrinks the legal
+camera box, so a position that was legal at ortho 5 near a region edge is outside
+the region at ortho 14. `SetOrthographicSize` therefore re-clamps position on the
+same frame; without it the camera sits out of bounds for the ~0.18s SmoothDamp
+takes to ease back in — the same "visible for a few frames" failure Phase 20 fixed
+in `SnapTo`, arriving by a different route. Measured:
+`camera (37.19, 35.00) legal at ortho 5 -> (32.13, 26.00) on the same frame at ortho 14`.
+
+Pan range confirms the box is live: **34.4 units of horizontal pan at ortho 5 ->
+24.3 at ortho 14** inside the 40-unit region.
+
+### Item 3 — UI immunity, measured under a real gesture
+
+CLAUDE.md's claim (Overlay + ScaleWithScreenSize ⇒ zoom can't touch UI) verified
+by *measurement under real simulated pinch input*, not by re-reading the setup:
+`HudIsUnaffectedByRealPinchZoom` samples all **8** canvas `Text` elements' font
+sizes **and** their `GetWorldCorners` (screen pixels, for an Overlay canvas)
+before the gesture, then re-checks at both clamp bounds. Every rect identical to
+the pixel; `scaleFactor 0.385` unchanged across a real 2.8x pinch. Visual
+corroboration in `Logs/phase23_zoom_min_ortho05.png` vs
+`phase23_zoom_max_ortho14.png`: identical HUD bars and buttons, world art 2.8x
+apart — and the P3-Phase 22 Canvas prompt holds its size in both, which is
+exactly the regression Phase 22 was written to prevent.
+
+### Item 4 — the gesture, and its collision with tap-to-move
+
+`World/PinchZoom.cs` recognises the gesture only; every size change goes through
+`CameraFollow.SetOrthographicSize`, so one place owns what a legal zoom and a
+legal camera position are. Zoom is a **ratio against the separation the gesture
+started at**, not a per-frame delta — a delta accumulates error over a long
+gesture and can't be undone by moving the fingers back. Verified: a pinch out to
+2x and back to the starting separation returns ortho 14.00 exactly. Gestures need
+`MinStartSeparationPx = 60` to begin, since a ratio anchored on a 3px baseline
+turns one frame of jitter into a slam to a clamp bound.
+
+**DECISION (mechanical, logged not asked):** a pinch's first finger lands alone
+and `PlayerController` has already read it as a tap-to-move before the second
+arrives. `PinchZoom` cancels that order on gesture start
+(`PlayerController.CancelRecentTapMove`), and `HandleTap` bails while
+`IsPinching` — with `_pressWasHeld` updated *before* the bail-out, or lifting one
+finger fires a phantom tap from the one still down.
+
+**Two of these tests failed on first run and both failures were correct.**
+Recorded because the fix was to the tests, and pretending otherwise would hide a
+real limitation:
+
+1. *"An older walk order survives a pinch"* — **false, and unfixable here.** When
+   the first finger lands on open ground it *is* a real tap, so the previous order
+   is already replaced before `PinchZoom` sees a gesture at all. The test now
+   asserts that reality explicitly. `TapCancelWindow` (0.35s) protects only the
+   narrower case where the first finger issued no tap (it hit a HUD button and
+   EventSystem swallowed it), which is what the rewritten test drives.
+2. *"The player never moves"* — off by **0.027 units**. `PlayerController.Update`
+   runs one `MoveStep` on the stray tap before the second finger cancels it. Real,
+   bounded by one frame of `moveSpeed` (0.075 units at 60fps, <8% of a cell), and
+   now asserted with that bound and logged rather than tolerance-fudged.
+
+### Verification
+
+- Compile: `Logs/p23_compile.log`, 0 `error CS`.
+- Full regression, **143/143 green**, both splits' filter-name counts matched the
+  XML `total=` (the silent-zero check): `Logs/p23_split_nographics.xml`
+  (118/118, exit 0) + `Logs/p23_split_render.xml` (25/25, exit 0).
+- `node Tools/testing/check-filters.mjs` → `RESULT: OK`, 143 source tests,
+  0 missing / 0 dead / 0 duplicates.
+- Screenshots: `Logs/phase23_minzoom_candidate_ortho{04,05,06,07,14}.png`,
+  `Logs/phase23_zoom_min_ortho05.png`, `Logs/phase23_zoom_max_ortho14.png`.
+
+**Out of scope, flagged not built:** zoom level is **not persisted** — every
+session starts at `DefaultOrthographicSize`. That would be a new save field, and
+save changes go through `validateSnapshot` (CLAUDE.md), so it wasn't taken on
+unasked.
+
+**P3-Phase 23: COMPLETE ✅**
+
+---
+
 ## P3-Phase 22 — context prompt moved from world-space TextMesh to Canvas UI (2026-08-07)
 
 Reported from a direct screenshot: the player-following context prompt (the crop
